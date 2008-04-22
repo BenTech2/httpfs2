@@ -554,7 +554,7 @@ int main(int argc, char *argv[])
                 case 't': {
                               char * end = " ";
                               if( isdigit(*(argv[1]))) {
-                                  url->timeout = strtol(argv[1], &end, 0);
+                                  main_url.timeout = strtol(argv[1], &end, 0);
                                   /* now end should point to '\0' */
                               }
                               if(*end){
