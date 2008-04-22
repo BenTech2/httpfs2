@@ -52,6 +52,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <time.h>
+#include <pthread.h>
 
 #ifdef USE_SSL
 #include <openssl/ssl.h>
@@ -61,7 +62,7 @@
 #define TIMEOUT 30
 #define CONSOLE "/dev/console"
 #define HEADER_SIZE 1024
-#define VERSION "0.1.1 \"No5 Lives!\""
+#define VERSION "0.1.2 \"Lemmings on the Run\""
 
 static char* argv0;
 
@@ -92,15 +93,16 @@ typedef struct url {
     time_t last_modified;
 } struct_url;
 
+static pthread_key_t url_key;
 static struct_url main_url;
- /* with single thread there is only one url */
-static struct_url * url = &main_url;
 
 static ssize_t get_stat(struct_url*, struct stat * stbuf);
 static int get_data(struct_url*, off_t start, size_t size);
 static int open_client_socket(struct_url *url);
 static int close_client_socket(struct_url *url);
 static int close_client_force(struct_url *url);
+static struct_url * thread_setup(void);
+static void destroy_url_copy(void *);
 
 /* Protocol symbols. */
 #define PROTO_HTTP 0
@@ -187,6 +189,7 @@ static int httpfs_stat(fuse_ino_t ino, struct stat *stbuf)
             break;
 
         case 2: {
+                    struct_url * url = thread_setup();
                     stbuf->st_mode = S_IFREG | 0444;
                     stbuf->st_nlink = 1;
                     return get_stat(url, stbuf);
@@ -305,6 +308,8 @@ static void httpfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
         off_t off, struct fuse_file_info *fi)
 {
     (void) fi;
+
+    struct_url * url = thread_setup();
     int res;
 
     assert(ino == 2);
@@ -592,12 +597,15 @@ int main(int argc, char *argv[])
     }else{
         return 3;
     }
+    close_client_force(&main_url); /* each thread should open its own socket */
+
     shift;
     if(fork_terminal && access(fork_terminal, O_RDWR)){
         errno_report(fork_terminal);
         fork_terminal=0;
     }
 
+    pthread_key_create(&url_key, &destroy_url_copy);
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct fuse_chan *ch;
     char *mountpoint;
@@ -633,7 +641,7 @@ int main(int argc, char *argv[])
                     if (se != NULL) {
                         if (fuse_set_signal_handlers(se) != -1) {
                             fuse_session_add_chan(se, ch);
-                            err = fuse_session_loop(se);
+                            err = fuse_session_loop_mt(se);
                             fuse_remove_signal_handlers(se);
                             fuse_session_remove_chan(ch);
                         }
@@ -682,6 +690,33 @@ static int close_client_force(struct_url *url) {
         close(url->sockfd);
     }
     return url->sock_type = SOCK_CLOSED;
+}
+
+static void destroy_url_copy(void * urlptr)
+{
+    if(urlptr){
+        fprintf(stderr, "%s: Thread %08lX ended.\n", argv0, pthread_self());
+        close_client_force(urlptr);
+        free(urlptr);
+    }
+}
+
+static void * create_url_copy(const struct_url * url)
+{
+    void * res = malloc(sizeof(struct_url));
+    memcpy(res, url, sizeof(struct_url));
+    return res;
+}
+
+static struct_url * thread_setup(void)
+{
+    struct_url * res = pthread_getspecific(url_key);
+    if(!res) {
+        fprintf(stderr, "%s: Thread %08lX started.\n", argv0, pthread_self());
+        res = create_url_copy(&main_url);
+        pthread_setspecific(url_key, res);
+    }
+    return res;
 }
 
 static int read_client_socket(struct_url *url, void * buf, size_t len) {
