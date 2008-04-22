@@ -59,6 +59,7 @@
 #endif
 
 #define TIMEOUT 30
+#define CONSOLE "/dev/console"
 #define HEADER_SIZE 1024
 #define VERSION "0.1.1 \"No5 Lives!\""
 
@@ -71,6 +72,7 @@ static char* argv0;
 
 typedef struct url {
     int proto;
+    int timeout;
     char * host; /*hostname*/
     int port;
     char * path; /*get path*/
@@ -384,7 +386,8 @@ static char * url_encode(char * path) {
 static int init_url(struct_url* url)
 {
     memset(url, 0, sizeof(url));
-    url->sock_type=SOCK_CLOSED;
+    url->sock_type = SOCK_CLOSED;
+    url->timeout = TIMEOUT;
     return 0;
 }
 
@@ -430,8 +433,8 @@ static void print_url(FILE *f, const struct_url * url)
 #endif
 }
 
-static int parse_url(const char * url, struct_url* res) {
-
+static int parse_url(const char * url, struct_url* res)
+{
     const char * url_orig = url;
     char* http = "http://";
 #ifdef USE_SSL
@@ -511,17 +514,66 @@ static int parse_url(const char * url, struct_url* res) {
     return res->proto;
 }
 
+static void usage(void)
+{
+        fprintf(stderr, "%s >>> Version: %s <<<\n", __FILE__, VERSION);
+        fprintf(stderr, "usage:  %s -c [console] -f -t timeout url mount-parameters\n\n", argv0);
+        fprintf(stderr, "\t -c \t use console for istandard input/outputi/error (default: %s)\n", CONSOLE);
+        fprintf(stderr, "\t -f stay in foreground  - do not fork\n");
+        fprintf(stderr, "\t -t set socket timeout in seconds (default: %i)\n", TIMEOUT);
+        fprintf(stderr, "\tmount-parameters shoiuld include the mount point\n");
+}
+
+#define shift { if(!argv[1]) { usage(); return 4; };\
+    argc--; argv[1] = argv[0]; argv = argv + 1;}
 
 int main(int argc, char *argv[])
 {
+    char * fork_terminal = CONSOLE;
+    int do_fork = 1;
     putenv("TZ=");/*UTC*/
     argv0 = argv[0];
+    init_url(&main_url);
+
+    while( *(argv[1]) == '-' )
+    {
+        char * arg = argv[1]; shift;
+        while (*++arg){
+            switch (*arg){
+                case 'c': if( *(argv[1]) != '-' ) {
+                              fork_terminal = argv[1]; shift;
+                          }else{
+                              fork_terminal = 0;
+                          }
+                          break;
+                case 't': {
+                              char * end = " ";
+                              if( isdigit(*(argv[1]))) {
+                                  url->timeout = strtol(argv[1], &end, 0);
+                                  /* now end should point to '\0' */
+                              }
+                              if(*end){
+                                  usage(); 
+                                  fprintf(stderr, "'%s' is not a number.\n",
+                                          argv[0]);
+                                  return 4;
+                              }
+                              shift;
+                          }
+                          break;
+                case 'f': do_fork = 0;
+                default:
+                          usage();
+                          fprintf(stderr, "Unknown option '%c'.\n", *arg);
+                          return 4;
+            }
+        }
+    }
+
     if (argc < 3) {
-        (void) fprintf(stderr, "usage:  %s url mount-parameters\n", argv[0]);
-        (void) fprintf(stderr, ">>> Version: %s <<<\n", VERSION);
+        usage();
         return 1;
     }
-    init_url(&main_url);
     if(parse_url(argv[1], &main_url) == -1){
         fprintf(stderr, "invalid url: %s\n", argv[1]);
         return 2;
@@ -540,14 +592,16 @@ int main(int argc, char *argv[])
     }else{
         return 3;
     }
-    argv[1] = argv[0];
+    shift;
+    if(fork_terminal && access(fork_terminal, O_RDWR)){
+        errno_report(fork_terminal);
+        fork_terminal=0;
+    }
 
-    struct fuse_args args = FUSE_ARGS_INIT(argc - 1, argv + 1);
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct fuse_chan *ch;
     char *mountpoint;
     int err = -1;
-    int do_fork = 1;
-    char * fork_terminal = "/dev/console";
     int fork_res = 0;
 
     if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1 &&
@@ -560,16 +614,18 @@ int main(int argc, char *argv[])
             case 0:
 
                 {
-                    /* if we can access the console use it */
-                    int fd = open(fork_terminal, O_RDONLY);
-                    dup2(fd, 0);
-                    close (fd);
-                    fd = open(fork_terminal, O_WRONLY);
-                    dup2(fd, 1);
-                    close (fd);
-                    fd = open(fork_terminal, O_WRONLY|O_SYNC);
-                    dup2(fd, 2);
-                    close (fd);
+                    if(fork_terminal){
+                        /* if we can access the console use it */
+                        int fd = open(fork_terminal, O_RDONLY);
+                        dup2(fd, 0);
+                        close (fd);
+                        fd = open(fork_terminal, O_WRONLY);
+                        dup2(fd, 1);
+                        close (fd);
+                        fd = open(fork_terminal, O_WRONLY|O_SYNC);
+                        dup2(fd, 2);
+                        close (fd);
+                    }
 
                     struct fuse_session *se;
                     se = fuse_lowlevel_new(&args, &httpfs_oper,
@@ -631,7 +687,7 @@ static int close_client_force(struct_url *url) {
 static int read_client_socket(struct_url *url, void * buf, size_t len) {
     int res;
     struct timeval timeout;
-    timeout.tv_sec = TIMEOUT;
+    timeout.tv_sec = url->timeout;
     timeout.tv_usec = 0;
     setsockopt(url->sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 #ifdef USE_SSL
@@ -818,8 +874,8 @@ plain_report(const char * reason, const char * method,
  */
 
 static ssize_t
-parse_header(struct_url *url, const char * method, size_t * content_length,
-        const char * buf, ssize_t bytes, int expect)
+parse_header(struct_url *url, const char * buf, ssize_t bytes,
+        const char * method, size_t * content_length, int expect)
 {
     /* FIXME check the header parser */
     int status;
@@ -936,10 +992,12 @@ parse_header(struct_url *url, const char * method, size_t * content_length,
  */
 
 static ssize_t
-exchange(struct_url *url, char * buf, char * method, off_t start, off_t end)
+exchange(struct_url *url, char * buf, const char * method,
+        size_t * content_length, off_t start, off_t end, size_t * header_length)
 {
     ssize_t res;
     ssize_t bytes;
+    int range = (end > 0);
 
     /* Build request buffer, starting with the request method. */
 
@@ -947,7 +1005,7 @@ exchange(struct_url *url, char * buf, char * method, off_t start, off_t end)
             method, url->path, url->host);
     bytes += snprintf(buf + bytes, HEADER_SIZE - bytes,
             "User-Agent: %s %s\r\n", __FILE__, VERSION);
-    if(start || end) bytes += snprintf(buf + bytes, HEADER_SIZE - bytes,
+    if (range) bytes += snprintf(buf + bytes, HEADER_SIZE - bytes,
                 "Range: bytes=%llu-%llu\r\n",
                 (unsigned long long) start, (unsigned long long) end);
 #ifdef USE_AUTH
@@ -973,8 +1031,18 @@ exchange(struct_url *url, char * buf, char * method, off_t start, off_t end)
         res = read_client_socket(url, buf, HEADER_SIZE);
         if ( ((res <= 0) && ! errno) || (errno == EAGAIN)) {
             close_client_force(url);
-        } else return res;
+        } else break;
     }
+    if (res <= 0) return res;
+    bytes = res;
+    
+    res = parse_header(url, buf, bytes, method, content_length,
+            range ? 206 : 200);
+    if (res <= 0) return res;
+
+    if (header_length) *header_length = res;
+
+    return bytes;
 }
 
 /* 
@@ -985,8 +1053,7 @@ exchange(struct_url *url, char * buf, char * method, off_t start, off_t end)
 static ssize_t get_stat(struct_url *url, struct stat * stbuf) {
     char buf[HEADER_SIZE];
 
-    if(parse_header(url, "HEAD", &(url->file_size), buf, 
-                exchange(url, buf, "HEAD", 0, 0), 200) < 0 )
+    if( exchange(url, buf, "HEAD", &(url->file_size), 0, 0, 0) < 0 )
         return -1;
 
     close_client_socket(url);
@@ -1001,22 +1068,6 @@ static ssize_t get_stat(struct_url *url, struct stat * stbuf) {
  * allows to read arbitrary bytes
  */
 
-static const char * parse_get(struct_url *url, size_t * size,
-        const void * buf, ssize_t bytes)
-{
-    size_t content_length;
-    ssize_t res;
-
-    if ((res = parse_header(url, "GET", &content_length, buf, bytes, 206)) < 0)
-        return 0;
-
-    if (content_length != *size) {
-        plain_report("GET", "didn't yield the whole piece", 0, 0);
-        *size = min(content_length, *size);
-    }
-    return buf+res;
-}
-
 static ssize_t get_data(struct_url *url, off_t start, size_t size)
 {
     char buf[HEADER_SIZE];
@@ -1024,10 +1075,19 @@ static ssize_t get_data(struct_url *url, off_t start, size_t size)
     ssize_t bytes;
     off_t end = start + size - 1;
     char * destination = url->req_buf;
+    size_t content_length, header_length;
 
-    bytes = exchange(url, buf, "GET", start, end);
-    b = parse_get(url, &size, buf, bytes);
-    if(!b) return -1;
+    bytes = exchange(url, buf, "GET", &content_length,
+            start, end, &header_length);
+    if(bytes <= 0) return -1;
+
+    if (content_length != size) {
+        plain_report("GET", "didn't yield the whole piece", 0, 0);
+        size = min(content_length, size);
+    }
+
+
+    b = buf + header_length;
 
     bytes -= (b - buf);
     memcpy(destination, b, bytes);
