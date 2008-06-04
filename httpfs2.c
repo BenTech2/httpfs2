@@ -97,7 +97,7 @@ static pthread_key_t url_key;
 static struct_url main_url;
 
 static ssize_t get_stat(struct_url*, struct stat * stbuf);
-static int get_data(struct_url*, off_t start, size_t size);
+static ssize_t get_data(struct_url*, off_t start, size_t size);
 static int open_client_socket(struct_url *url);
 static int close_client_socket(struct_url *url);
 static int close_client_force(struct_url *url);
