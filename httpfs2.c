@@ -1000,7 +1000,7 @@ parse_header(struct_url *url, const char * buf, ssize_t bytes,
         if( mempref(ptr, date, end - ptr) ){
             memset(&tm, 0, sizeof(tm));
             if(!strptime(ptr + strlen(date),
-                        "%n%a,%n%d%n%b%n%Y%n%T%n%Z", &tm)){
+                        "%n%a, %d %b %Y %T %Z", &tm)){
                 plain_report("invalid time",
                         method, ptr + strlen(date),
                         (end - ptr) - strlen(date)) ;
