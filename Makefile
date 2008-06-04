@@ -1,8 +1,8 @@
 CC=gcc -g 
 CFLAGS :=  -Os -Wall $(shell pkg-config fuse --cflags)
 CPPFLAGS := -Wall -DUSE_AUTH -D_XOPEN_SOURCE=500 -D_ISOC99_SOURCE
-SSL_CPPFLAGS := -DUSE_SSL
-SSL_LDFLAGS := -lssl
+SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config openssl --cflags)
+SSL_LDFLAGS := $(shell pkg-config openssl --libs)
 LDFLAGS := $(shell pkg-config fuse --libs)
 
 targets = httpfs2 httpfs2_ssl
