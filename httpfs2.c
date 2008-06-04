@@ -1059,12 +1059,12 @@ exchange(struct_url *url, char * buf, const char * method,
              * Also socket that returns EAGAIN causes long delays. Reopen.
              */
         res = write_client_socket(url, buf, bytes);
-        if ( ((res <= 0) && ! errno) || (errno == EAGAIN)) {
+        if ( ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE)) {
             close_client_force(url); continue;
         }
         if (res <= 0) return res;
         res = read_client_socket(url, buf, HEADER_SIZE);
-        if ( ((res <= 0) && ! errno) || (errno == EAGAIN)) {
+        if ( ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE)) {
             close_client_force(url);
         } else break;
     }
