@@ -52,7 +52,14 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <time.h>
+
+#ifdef USE_THREAD
 #include <pthread.h>
+static pthread_key_t url_key;
+#define FUSE_LOOP fuse_session_loop_mt
+#else
+#define FUSE_LOOP fuse_session_loop
+#endif
 
 #ifdef USE_SSL
 #include <openssl/ssl.h>
@@ -93,7 +100,6 @@ typedef struct url {
     time_t last_modified;
 } struct_url;
 
-static pthread_key_t url_key;
 static struct_url main_url;
 
 static ssize_t get_stat(struct_url*, struct stat * stbuf);
@@ -597,7 +603,6 @@ int main(int argc, char *argv[])
     }else{
         return 3;
     }
-    close_client_force(&main_url); /* each thread should open its own socket */
 
     shift;
     if(fork_terminal && access(fork_terminal, O_RDWR)){
@@ -605,7 +610,10 @@ int main(int argc, char *argv[])
         fork_terminal=0;
     }
 
+#ifdef USE_THREAD
+    close_client_force(&main_url); /* each thread should open its own socket */
     pthread_key_create(&url_key, &destroy_url_copy);
+#endif
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct fuse_chan *ch;
     char *mountpoint;
@@ -641,7 +649,7 @@ int main(int argc, char *argv[])
                     if (se != NULL) {
                         if (fuse_set_signal_handlers(se) != -1) {
                             fuse_session_add_chan(se, ch);
-                            err = fuse_session_loop_mt(se);
+                            err = FUSE_LOOP(se);
                             fuse_remove_signal_handlers(se);
                             fuse_session_remove_chan(ch);
                         }
@@ -692,6 +700,8 @@ static int close_client_force(struct_url *url) {
     return url->sock_type = SOCK_CLOSED;
 }
 
+#ifdef USE_THREAD
+
 static void destroy_url_copy(void * urlptr)
 {
     if(urlptr){
@@ -718,6 +728,11 @@ static struct_url * thread_setup(void)
     }
     return res;
 }
+
+#else /*USE_THREAD*/
+static struct_url * thread_setup(void) { return &main_url; }
+#endif
+
 
 static int read_client_socket(struct_url *url, void * buf, size_t len) {
     int res;
