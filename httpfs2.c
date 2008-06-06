@@ -1075,12 +1075,12 @@ exchange(struct_url *url, char * buf, const char * method,
              */
         res = write_client_socket(url, buf, bytes);
         if ( ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE)) {
-            close_client_force(url); continue;
+            close_client_force(url); errno = 0; continue;
         }
         if (res <= 0) return res;
         res = read_client_socket(url, buf, HEADER_SIZE);
         if ( ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE)) {
-            close_client_force(url);
+            close_client_force(url); errno = 0;
         } else break;
     }
     if (res <= 0) return res;
