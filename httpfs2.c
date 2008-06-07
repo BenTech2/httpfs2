@@ -529,10 +529,10 @@ static void usage(void)
 {
         fprintf(stderr, "%s >>> Version: %s <<<\n", __FILE__, VERSION);
         fprintf(stderr, "usage:  %s -c [console] -f -t timeout url mount-parameters\n\n", argv0);
-        fprintf(stderr, "\t -c \t use console for istandard input/outputi/error (default: %s)\n", CONSOLE);
-        fprintf(stderr, "\t -f stay in foreground  - do not fork\n");
-        fprintf(stderr, "\t -t set socket timeout in seconds (default: %i)\n", TIMEOUT);
-        fprintf(stderr, "\tmount-parameters shoiuld include the mount point\n");
+        fprintf(stderr, "\t -c \tuse console for standard input/outputi/error (default: %s)\n", CONSOLE);
+        fprintf(stderr, "\t -f \tstay in foreground - do not fork\n");
+        fprintf(stderr, "\t -t \tset socket timeout in seconds (default: %i)\n", TIMEOUT);
+        fprintf(stderr, "\tmount-parameters should include the mount point\n");
 }
 
 #define shift { if(!argv[1]) { usage(); return 4; };\
@@ -546,7 +546,7 @@ int main(int argc, char *argv[])
     argv0 = argv[0];
     init_url(&main_url);
 
-    while( *(argv[1]) == '-' )
+    while( argv[1] && (*(argv[1]) == '-') )
     {
         char * arg = argv[1]; shift;
         while (*++arg){
