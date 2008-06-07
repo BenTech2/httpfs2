@@ -5,7 +5,7 @@ THR_CPPFLAGS := -DUSE_THREAD
 THR_LDFLAGS := -lpthread
 SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config openssl --cflags)
 SSL_LDFLAGS := $(shell pkg-config openssl --libs)
-LDFLAGS := $(shell pkg-config fuse --libs)
+LDFLAGS := $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl//)
 
 targets = httpfs2 httpfs2_ssl
 
