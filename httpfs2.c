@@ -10,7 +10,7 @@
  *
  */
 
-/* 
+/*
  * (c) 2006  hmb  marionraven at users.sourceforge.net
  * This 'beam me up, Scotty'-branch of httpfs tries to achieve,
  * that the mount-point-folder behaves as before.
@@ -181,7 +181,7 @@ static char * b64_encode(unsigned const char* ptr, int len) {
 
 #endif /* USE_AUTH */
 
-/* 
+/*
  * The FUSE operations originally ripped from the hello_ll sample.
  */
 
@@ -301,7 +301,7 @@ static void httpfs_open(fuse_req_t req, fuse_ino_t ino,
         fuse_reply_err(req, EACCES);
     else{
         /* direct_io is supposed to allow partial reads. However, setting
-         * the flag causes read length max at 4096 bytes which leads to 
+         * the flag causes read length max at 4096 bytes which leads to
          * *many* requests, poor performance, and errors. Some resources
          * like TCP ports are recycled too fast for Linux to cope.
          */
@@ -390,7 +390,7 @@ static char * url_encode(char * path) {
     return strdup(path); /*FIXME encode*/
 }
 
-/* 
+/*
  * functions for handling struct_url
  */
 
@@ -564,7 +564,7 @@ int main(int argc, char *argv[])
                                   /* now end should point to '\0' */
                               }
                               if(*end){
-                                  usage(); 
+                                  usage();
                                   fprintf(stderr, "'%s' is not a number.\n",
                                           argv[0]);
                                   return 4;
@@ -690,8 +690,8 @@ static int close_client_force(struct_url *url) {
         if (url->proto == PROTO_HTTPS) {
             SSL_free(url->ssl);
             SSL_CTX_free(url->ssl_ctx);
-            /* FIXME ssl errors 
-             * The openssl documentation says they can be collected here but 
+            /* FIXME ssl errors
+             * The openssl documentation says they can be collected here but
              * they are probably seen as read/write errors anyway.. */
         }
 #endif
@@ -773,7 +773,7 @@ write_client_socket(struct_url *url, const void * buf, size_t len)
     return -1; /*should not reach*/
 }
 
-/* 
+/*
  * Function yields either a positive int after connecting to
  * host 'hostname' on port 'port'  or < 0 in case of error
  *
@@ -784,7 +784,7 @@ write_client_socket(struct_url *url, const void * buf, size_t len)
  * port is expected in machine order (not net order)
  *
  * ((Flonix  defines USE_IPV6))
- * 
+ *
  */
 #if defined(AF_INET6) && defined(IN6_IS_ADDR_V4MAPPED)
 #define USE_IPV6
@@ -830,7 +830,7 @@ static int open_client_socket(struct_url *url) {
     }
 
     /* If there's an IPv4 address, use that, otherwise try IPv6. */
-    if (aiv4 == NULL) 
+    if (aiv4 == NULL)
         aiv4 = aiv6;
     if (aiv4 == NULL) {
         (void) fprintf(stderr, "%s: no valid address found for host %s\n",
@@ -901,7 +901,6 @@ static int open_client_socket(struct_url *url) {
     }
 #endif
     return url->sock_type = SOCK_OPEN;
-    
 }
 
 static void
@@ -1027,9 +1026,6 @@ parse_header(struct_url *url, const char * buf, ssize_t bytes,
         if( mempref(ptr, close, end - ptr) ){
             seen_close = 1;
         }
-        
-        //if (!strcmp("HEAD", method))
-        //plain_report("unknown header", method, ptr, end-ptr); /*DEBUG*/
     }
 }
 
@@ -1067,7 +1063,7 @@ exchange(struct_url *url, char * buf, const char * method,
 
     /* Now actually send it. */
     while(1){
-            /* 
+            /*
              * It looks like the sockets abandoned by the server do not go away.
              * They allow zero writes, and zero reads. So this is the place
              * where a stale socket would be detected.
@@ -1085,7 +1081,7 @@ exchange(struct_url *url, char * buf, const char * method,
     }
     if (res <= 0) return res;
     bytes = res;
-    
+
     res = parse_header(url, buf, bytes, method, content_length,
             range ? 206 : 200);
     if (res <= 0) return res;
@@ -1095,7 +1091,7 @@ exchange(struct_url *url, char * buf, const char * method,
     return bytes;
 }
 
-/* 
+/*
  * Function uses HEAD-HTTP-Request
  * to determine the file size
  */
@@ -1112,7 +1108,7 @@ static ssize_t get_stat(struct_url *url, struct stat * stbuf) {
     return stbuf->st_size = url->file_size;
 }
 
-/* 
+/*
  * get_data does all the magic
  * a GET-Request with Range-Header
  * allows to read arbitrary bytes
