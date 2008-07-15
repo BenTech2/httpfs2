@@ -1,0 +1,26 @@
+Source: httpfs2
+#Section: unknown
+Priority: extra
+Maintainer: Michal Suchanek <hramrach@centrum.cz>
+Build-Depends: debhelper (>= 6), libfuse-dev, libssl-dev
+Standards-Version: 3.7.3
+#Homepage: <insert the upstream URL, if relevant>
+
+Package: httpfs2
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: FUSE filesystem for mounting files from http servers
+ This variant is with minimal options to cut dependencies for use in initramfs.
+ Use: httpfs2 http://<server>/<dir>/<image>.iso /mnt
+      mount -o ro,loop /mnt/<image>.iso /mnt
+      less /mnt/packages.txt
+
+Package: httpfs2-ssl
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: FUSE filesystem for mounting files from http servers
+ This variant is with support for SSL and multpile threads.
+ Use: httpfs2 http://<server>/<dir>/<image>.iso /mnt
+      mount -o ro,loop /mnt/<image>.iso /mnt
+      less /mnt/packages.txt
+
