@@ -11,6 +11,7 @@ httpfs2 - mount a file from a http server into the filesystem
 SYNOPSIS
 --------
 *httpfs2* ['OPTIONS'] 'URL' 'FUSE-OPTIONS'
+*httpfs2_ssl* ['OPTIONS'] 'URL' 'FUSE-OPTIONS'
 
 
 DESCRIPTION
