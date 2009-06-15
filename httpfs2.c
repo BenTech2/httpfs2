@@ -668,7 +668,7 @@ int main(int argc, char *argv[])
     }
     fuse_opt_free_args(&args);
 
-    return err ? 1 : 0;
+    return err ? err : 0;
 }
 
 

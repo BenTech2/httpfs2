@@ -2,7 +2,7 @@ Source: httpfs2
 #Section: unknown
 Priority: extra
 Maintainer: Michal Suchanek <hramrach@centrum.cz>
-Build-Depends: debhelper (>= 6), libfuse-dev, libssl-dev
+Build-Depends: debhelper (>= 6), libfuse-dev, libssl-dev, asciidoc, docbook-utils
 Standards-Version: 3.7.3
 #Homepage: <insert the upstream URL, if relevant>
 
