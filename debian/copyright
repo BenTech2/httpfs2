@@ -1,0 +1,20 @@
+The package source can be obtained at http://sourceforge.net/projects/httpfs/
+
+Copyright:
+
+Copyright (c) 2008 Michal Suchanek <hramrach@centrum.cz>
+Copyright (c) 2006  hmb  marionraven at users.sourceforge.net
+
+Based on libfuse sample code.
+
+Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+
+License:
+
+This program is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation; either version 2, or (at your option) any
+later version.
+
+On Debian systems, the complete text of the GNU General Public License
+can be found in the file `/usr/share/common-licenses/GPL-2'.
