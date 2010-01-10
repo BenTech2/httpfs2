@@ -82,10 +82,10 @@ install-arch:
 	mkdir -p $(CURDIR)/debian/httpfs2/usr/share/man/man1
 	install httpfs2 $(CURDIR)/debian/httpfs2/usr/bin
 	install httpfs2.1 $(CURDIR)/debian/httpfs2/usr/share/man/man1
-	mkdir -p $(CURDIR)/debian/httpfs2-ssl/usr/bin
-	mkdir -p $(CURDIR)/debian/httpfs2-ssl/usr/share/man/man1
-	install httpfs2_ssl $(CURDIR)/debian/httpfs2-ssl/usr/bin
-	install httpfs2_ssl.1 $(CURDIR)/debian/httpfs2-ssl/usr/share/man/man1
+	#mkdir -p $(CURDIR)/debian/httpfs2-ssl/usr/bin
+	#mkdir -p $(CURDIR)/debian/httpfs2-ssl/usr/share/man/man1
+	#install httpfs2_ssl $(CURDIR)/debian/httpfs2-ssl/usr/bin
+	#install httpfs2_ssl.1 $(CURDIR)/debian/httpfs2-ssl/usr/share/man/man1
 
 	dh_install -s
 # Must not depend on anything. This is to be called by
