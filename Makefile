@@ -7,7 +7,7 @@ SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config openssl --cflags)
 SSL_LDFLAGS := $(shell pkg-config openssl --libs)
 LDFLAGS := $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl//)
 
-targets = httpfs2 httpfs2_ssl httpfs2.1 httpfs2_ssl.1
+targets = httpfs2 httpfs2.1 #httpfs2_ssl httpfs2_ssl.1
 
 all: $(targets)
 
