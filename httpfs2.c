@@ -573,6 +573,7 @@ int main(int argc, char *argv[])
                           }
                           break;
                 case 'f': do_fork = 0;
+			  break;
                 default:
                           usage();
                           fprintf(stderr, "Unknown option '%c'.\n", *arg);
