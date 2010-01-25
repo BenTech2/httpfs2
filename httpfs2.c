@@ -528,8 +528,8 @@ static int parse_url(const char * url, struct_url* res)
 static void usage(void)
 {
         fprintf(stderr, "%s >>> Version: %s <<<\n", __FILE__, VERSION);
-        fprintf(stderr, "usage:  %s -c [console] -f -t timeout url mount-parameters\n\n", argv0);
-        fprintf(stderr, "\t -c \tuse console for standard input/outputi/error (default: %s)\n", CONSOLE);
+        fprintf(stderr, "usage:  %s [-c [console]] [-f] [-t timeout] url mount-parameters\n\n", argv0);
+        fprintf(stderr, "\t -c \tuse console for standard input/output/error (default: %s)\n", CONSOLE);
         fprintf(stderr, "\t -f \tstay in foreground - do not fork\n");
         fprintf(stderr, "\t -t \tset socket timeout in seconds (default: %i)\n", TIMEOUT);
         fprintf(stderr, "\tmount-parameters should include the mount point\n");
