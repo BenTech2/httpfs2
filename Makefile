@@ -7,7 +7,15 @@ SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config openssl --cflags)
 SSL_LDFLAGS := $(shell pkg-config openssl --libs)
 LDFLAGS := $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl//)
 
-targets = httpfs2 httpfs2.1 #httpfs2_ssl httpfs2_ssl.1
+intermediates =
+
+binaries = httpfs2 #httpfs2_ssl
+
+manpages = $(addsuffix .1,$(binaries))
+
+intermediates += $(addsuffix .xml,$(manpages))
+
+targets = $(binaries) $(manpages)
 
 all: $(targets)
 
@@ -17,11 +25,11 @@ httpfs2: httpfs2.c
 httpfs2_ssl: httpfs2.c
 	$(CC) $(CPPFLAGS) $(THR_CPPFLAGS) $(SSL_CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(THR_LDFLAGS) $(SSL_LDFLAGS) httpfs2.c -o httpfs2_ssl
 
-httpfs2.1: httpfs2.1.txt
-	a2x -f manpage  httpfs2.1.txt
-
 httpfs2_ssl.1: httpfs2.1
 	ln -sf httpfs2.1 httpfs2_ssl.1
 
 clean:
-	rm -f $(targets) httpfs.1.xml
+	rm -f $(targets) $(intermediates)
+
+%.1: %.1.txt
+	a2x -f manpage $<
