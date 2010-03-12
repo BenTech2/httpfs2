@@ -1,3 +1,9 @@
+httpfs2 (0.1.4) unstable; urgency=low
+
+  * closes #566362, #567128
+
+ -- Michal Suchanek <hramrach@centrum.cz>  Fri, 12 Mar 2010 17:34:20 +0100
+
 httpfs2 (0.1.3-1) unstable; urgency=low
 
   * Initial release (Closes: #380461).
