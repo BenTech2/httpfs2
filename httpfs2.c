@@ -16,10 +16,10 @@
  * that the mount-point-folder behaves as before.
  * But how can you access the original folder after the mount?
  * Answer comes from FuseCompress:
- *	Open the folder before the mount,
- *	keep it open all the time,
- *	make a chdir to it
- *	and always use a relative path.
+ *      Open the folder before the mount,
+ *      keep it open all the time,
+ *      make a chdir to it
+ *      and always use a relative path.
  * It suffices not to chdir in main() and it's unnecessary to
  * do it in every function. httpfs_init is the right place.
  *
@@ -353,11 +353,11 @@ static void httpfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 }
 
 static struct fuse_lowlevel_ops httpfs_oper = {
-    .lookup		= httpfs_lookup,
-    .getattr	= httpfs_getattr,
-    .readdir	= httpfs_readdir,
-    .open		= httpfs_open,
-    .read		= httpfs_read,
+    .lookup             = httpfs_lookup,
+    .getattr            = httpfs_getattr,
+    .readdir            = httpfs_readdir,
+    .open               = httpfs_open,
+    .read               = httpfs_read,
 };
 
 /*
@@ -457,7 +457,7 @@ static int parse_url(const char * url, struct_url* res)
     if (strncmp(http, url, strlen(http)) == 0) {
         url += strlen(http);
         res->proto = PROTO_HTTP;
-        res->port = 80;	
+        res->port = 80; 
 #ifdef USE_SSL
     } else if (strncmp(https, url, strlen(https)) == 0) {
         url += strlen(https);
@@ -573,7 +573,7 @@ int main(int argc, char *argv[])
                           }
                           break;
                 case 'f': do_fork = 0;
-			  break;
+                          break;
                 default:
                           usage();
                           fprintf(stderr, "Unknown option '%c'.\n", *arg);
@@ -747,7 +747,7 @@ static int read_client_socket(struct_url *url, void * buf, size_t len) {
     else
 #endif
         res = read(url->sockfd, buf, len);
-    if(res <= 0) errno_report("write");
+    if(res <= 0) errno_report("read");
     return res;
 }
 
@@ -1062,30 +1062,50 @@ exchange(struct_url *url, char * buf, const char * method,
 #endif
     bytes += snprintf(buf + bytes, HEADER_SIZE - bytes, "\r\n");
 
+
     /* Now actually send it. */
     while(1){
-            /*
-             * It looks like the sockets abandoned by the server do not go away.
-             * They allow zero writes, and zero reads. So this is the place
-             * where a stale socket would be detected.
-             * Also socket that returns EAGAIN causes long delays. Reopen.
-             */
+        /*
+         * It looks like the sockets abandoned by the server do not go away.
+         * Instead of returning EPIPE they allow zero writes and zero reads. So
+         * this is the place where a stale socket would be detected.
+         *
+         * Socket that return EAGAIN cause long delays. Reopen.
+         *
+         * Reset errno because reads/writes of 0 bytes are a success and are not
+         * required to touch it but are handled as error below.
+         *
+         */
+        errno = 0;
         res = write_client_socket(url, buf, bytes);
         if ( ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE)) {
-            close_client_force(url); errno = 0; continue;
+            errno_report("exchange: failed to send request, retrying"); /* DEBUG */
+            close_client_force(url);
+            continue;
         }
-        if (res <= 0) return res;
+        if (res <= 0){
+            errno_report("exchange: failed to send request"); /* DEBUG */
+            return res;
+        }
         res = read_client_socket(url, buf, HEADER_SIZE);
         if ( ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE)) {
-            close_client_force(url); errno = 0;
+            errno_report("exchange: did not receive a reply, retrying"); /* DEBUG */
+            close_client_force(url);
+            continue;
+        } else if (res <= 0) {
+            errno_report("exchange: failed receving reply from server"); /* DEBUG */
+            return res;
         } else break;
+        /* Not reached */
     }
-    if (res <= 0) return res;
     bytes = res;
 
     res = parse_header(url, buf, bytes, method, content_length,
             range ? 206 : 200);
-    if (res <= 0) return res;
+    if (res <= 0){
+        plain_report("exchange: server error", method, buf, bytes);
+        return res;
+    }
 
     if (header_length) *header_length = res;
 
@@ -1129,7 +1149,7 @@ static ssize_t get_data(struct_url *url, off_t start, size_t size)
     if(bytes <= 0) return -1;
 
     if (content_length != size) {
-        plain_report("GET", "didn't yield the whole piece", 0, 0);
+        plain_report("didn't yield the whole piece.", "GET", 0, 0);
         size = min(content_length, size);
     }
 
