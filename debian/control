@@ -4,10 +4,8 @@ Priority: extra
 Maintainer: Michal Suchanek <hramrach@centrum.cz>
 Build-Depends:
  debhelper (>= 7.0.50~),
- asciidoc,
- xmlto,
- libfuse-dev (>> 2.6),
- pkg-config,
+ asciidoc, xmlto,
+ libfuse-dev (>> 2.6), pkg-config,
 Standards-Version: 3.8.4
 Homepage: http://sourceforge.net/projects/httpfs/
 
