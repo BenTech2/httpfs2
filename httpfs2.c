@@ -12,16 +12,6 @@
 
 /*
  * (c) 2006  hmb  marionraven at users.sourceforge.net
- * This 'beam me up, Scotty'-branch of httpfs tries to achieve,
- * that the mount-point-folder behaves as before.
- * But how can you access the original folder after the mount?
- * Answer comes from FuseCompress:
- *      Open the folder before the mount,
- *      keep it open all the time,
- *      make a chdir to it
- *      and always use a relative path.
- * It suffices not to chdir in main() and it's unnecessary to
- * do it in every function. httpfs_init is the right place.
  *
  */
 
