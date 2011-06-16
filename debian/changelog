@@ -1,12 +1,10 @@
 httpfs2 (0.1.4-1) unstable; urgency=low
 
-  * new upstream version
-  * fixes -f option
-    - closes #566362
-  * fixes error handling in exchange() loop
-    - closes #567128
-  * bump standards version to 3.8.4
-  * change dependency wrapping to make diffing easier
+  * New upstream release:
+    - Fixes -f option (Closes: #566362).
+    - Fixes error handling in exchange() loop (Closes: #567128).
+  * Bump standards version to 3.8.4.
+  * Change dependency wrapping to make diffing easier.
 
  -- Michal Suchanek <hramrach@centrum.cz>  Fri, 12 Mar 2010 17:34:20 +0100
 
