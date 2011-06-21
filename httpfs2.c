@@ -78,6 +78,9 @@ typedef struct url {
 #ifdef USE_AUTH
     char * auth; /*encoded auth data*/
 #endif
+#ifdef RETRY_ON_RESET
+    int retry_reset; /*retry reset connections*/
+#endif
     int sockfd;
     int sock_type;
 #ifdef USE_SSL
@@ -518,9 +521,12 @@ static int parse_url(const char * url, struct_url* res)
 static void usage(void)
 {
         fprintf(stderr, "%s >>> Version: %s <<<\n", __FILE__, VERSION);
-        fprintf(stderr, "usage:  %s [-c [console]] [-f] [-t timeout] url mount-parameters\n\n", argv0);
+        fprintf(stderr, "usage:  %s [-c [console]] [-f] [-t timeout] [-r] url mount-parameters\n\n", argv0);
         fprintf(stderr, "\t -c \tuse console for standard input/output/error (default: %s)\n", CONSOLE);
         fprintf(stderr, "\t -f \tstay in foreground - do not fork\n");
+#ifdef RETRY_ON_RESET
+        fprintf(stderr, "\t -r \tretry connection on reset\n");
+#endif
         fprintf(stderr, "\t -t \tset socket timeout in seconds (default: %i)\n", TIMEOUT);
         fprintf(stderr, "\tmount-parameters should include the mount point\n");
 }
@@ -547,6 +553,10 @@ int main(int argc, char *argv[])
                               fork_terminal = 0;
                           }
                           break;
+#ifdef RETRY_ON_RESET
+                case 'r': main_url.retry_reset = 1;
+                          break;
+#endif
                 case 't': {
                               char * end = " ";
                               if( isdigit(*(argv[1]))) {
@@ -957,7 +967,7 @@ parse_header(struct_url *url, const char * buf, ssize_t bytes,
     status = strtol( ptr + strlen(http), (char **)&ptr, 10);
     if (status != expect) {
         fprintf(stderr, "%s: %s: failed with status: %d%.*s.\n",
-                argv0, method, status, (end - ptr) - 1, ptr);
+                argv0, method, status, (int)((end - ptr) - 1), ptr);
         if (!strcmp("HEAD", method)) fwrite(buf, bytes, 1, stderr); /*DEBUG*/
         errno = EIO;
         if (status == 404) errno = ENOENT;
@@ -1066,9 +1076,18 @@ exchange(struct_url *url, char * buf, const char * method,
          * required to touch it but are handled as error below.
          *
          */
+        /* ECONNRESET happens with some dodgy servers so may need to handle that.
+         * Allow for building without it in case it is not defined.
+         */
+#ifdef RETRY_ON_RESET
+#define CONNFAIL ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE) || \
+        (url->retry_reset && (errno == ECONNRESET))
+#else
+#define CONNFAIL ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE)
+#endif
         errno = 0;
         res = write_client_socket(url, buf, bytes);
-        if ( ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE)) {
+        if (CONNFAIL) {
             errno_report("exchange: failed to send request, retrying"); /* DEBUG */
             close_client_force(url);
             continue;
@@ -1078,7 +1097,7 @@ exchange(struct_url *url, char * buf, const char * method,
             return res;
         }
         res = read_client_socket(url, buf, HEADER_SIZE);
-        if ( ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE)) {
+        if (CONNFAIL) {
             errno_report("exchange: did not receive a reply, retrying"); /* DEBUG */
             close_client_force(url);
             continue;
