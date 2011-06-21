@@ -356,14 +356,15 @@ static struct fuse_lowlevel_ops httpfs_oper = {
 /*
  * A few utility functions
  */
-
-static char * strndup(const char * str, int n){
+#ifdef NEED_STRNDUP
+static char * strndup(const char * str, size_t n){
     if(n > strlen(str)) n = strlen(str);
     char * res = malloc(n + 1);
     memcpy(res, str, n);
     res[n] = 0;
     return res;
 }
+#endif
 
 static int mempref(const char * mem, const char * pref, size_t size)
 {
