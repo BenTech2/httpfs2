@@ -1,15 +1,19 @@
-CC=gcc -g 
-CFLAGS :=  -Os -Wall $(shell pkg-config fuse --cflags)
-CPPFLAGS := -Wall -DUSE_AUTH -D_XOPEN_SOURCE=500 -D_ISOC99_SOURCE
+CC ?= gcc
+CFLAGS ?=  -g -Os -Wall $(shell pkg-config fuse --cflags)
+CPPFLAGS ?= -Wall -Wno-unused-function -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE
 THR_CPPFLAGS := -DUSE_THREAD
 THR_LDFLAGS := -lpthread
 SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config openssl --cflags)
 SSL_LDFLAGS := $(shell pkg-config openssl --libs)
-LDFLAGS := $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl//)
+LDFLAGS ?= $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl// -e s/-pthread// -e "s/  / /g")
 
 intermediates =
 
-binaries = httpfs2 #httpfs2_ssl
+variants = _ssl _ssl_mt _mt
+
+binbase = httpfs2
+
+binaries = $(addsuffix $(binsuffix),$(binbase))
 
 manpages = $(addsuffix .1,$(binaries))
 
@@ -17,22 +21,39 @@ intermediates += $(addsuffix .xml,$(manpages))
 
 targets = $(binaries) $(manpages)
 
+full:
+	$(MAKE) all $(addprefix all,$(variants))
+
 all: $(targets)
 
-httpfs2: httpfs2.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) httpfs2.c -o httpfs2
+httpfs2$(binsuffix): httpfs2.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) httpfs2.c $(LDFLAGS) -o $@
 
-httpfs2_ssl: httpfs2.c
-	$(CC) $(CPPFLAGS) $(THR_CPPFLAGS) $(SSL_CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(THR_LDFLAGS) $(SSL_LDFLAGS) httpfs2.c -o httpfs2_ssl
+httpfs2%.1: httpfs2.1
+	ln -sf httpfs2.1 $@
 
-httpfs2_ssl.1: httpfs2.1
-	ln -sf httpfs2.1 httpfs2_ssl.1
+clean: clean_recursive_full
 
-clean:
+clean_recursive:
 	rm -f $(targets) $(intermediates)
+
+%_full:
+	$(MAKE) $* $(addprefix $*,$(variants))
 
 %.1: %.1.txt
 	a2x -f manpage $<
+
+%_ssl: $*
+	$(MAKE) CPPFLAGS="$(CPPFLAGS) $(SSL_CPPFLAGS)" LDFLAGS="$(LDFLAGS) $(SSL_LDFLAGS)" binsuffix=_ssl$(binsuffix) $*
+
+%_mt: $*
+	$(MAKE) CPPFLAGS="$(CPPFLAGS) $(THR_CPPFLAGS)" LDFLAGS="$(LDFLAGS) $(THR_LDFLAGS)" binsuffix=_mt$(binsuffix) $*
+
+%_lstr: $*
+	$(MAKE) CPPFLAGS="$(CPPFLAGS) -DNEED_STRNDUP -U_XOPEN_SOURCE -D_XOPEN_SOURCE=500" binsuffix=_lstr$(binsuffix) $*
+
+%_rst: $*
+	$(MAKE) CPPFLAGS="$(CPPFLAGS) -DRETRY_ON_RESET" binsuffix=_rst$(binsuffix) $*
 
 # Rules to automatically make a Debian package
 
