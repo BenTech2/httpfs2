@@ -1,15 +1,14 @@
-CC ?= gcc
-CFLAGS ?=  -g -Os -Wall $(shell pkg-config fuse --cflags)
-CPPFLAGS ?= -Wall -Wno-unused-function -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE
+MAIN_CFLAGS :=  -g -Os -Wall $(shell pkg-config fuse --cflags)
+MAIN_CPPFLAGS := -Wall -Wno-unused-function -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE
 THR_CPPFLAGS := -DUSE_THREAD
 THR_LDFLAGS := -lpthread
 SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config openssl --cflags)
 SSL_LDFLAGS := $(shell pkg-config openssl --libs)
-LDFLAGS ?= $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl// -e s/-pthread// -e "s/  / /g")
+MAIN_LDFLAGS := $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl// -e s/-pthread// -e "s/  / /g")
 
 intermediates =
 
-variants = _ssl _ssl_mt _mt
+variants = _mt #_ssl _ssl_mt
 
 binbase = httpfs2
 
@@ -27,7 +26,7 @@ full:
 all: $(targets)
 
 httpfs2$(binsuffix): httpfs2.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) httpfs2.c $(LDFLAGS) -o $@
+	$(CC) $(MAIN_CPPFLAGS) $(CPPFLAGS) $(MAIN_CFLAGS) $(CFLAGS) httpfs2.c $(MAIN_LDFLAGS) $(LDFLAGS) -o $@
 
 httpfs2%.1: httpfs2.1
 	ln -sf httpfs2.1 $@
