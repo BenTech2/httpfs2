@@ -43,6 +43,7 @@
 #include <netdb.h>
 #include <time.h>
 #include <stddef.h>
+#include <inttypes.h>
 
 #ifdef USE_THREAD
 #include <pthread.h>
@@ -605,7 +606,7 @@ int main(int argc, char *argv[])
     struct stat st;
     off_t size = get_stat(&main_url, &st);
     if(size >= 0) {
-        fprintf(stderr, "file size: \t%zd\n", size);
+        fprintf(stderr, "file size: \t%" PRIdMAX "\n", (intmax_t)size);
     }else{
         return 3;
     }
@@ -1059,7 +1060,7 @@ exchange(struct_url *url, char * buf, const char * method,
     bytes += (size_t)snprintf(buf + bytes, HEADER_SIZE - bytes,
             "User-Agent: %s %s\r\n", __FILE__, VERSION);
     if (range) bytes += (size_t)snprintf(buf + bytes, HEADER_SIZE - bytes,
-                "Range: bytes=%zd-%zd\r\n", start, end);
+                "Range: bytes=%" PRIdMAX "-%" PRIdMAX "\r\n", (intmax_t)start, (intmax_t)end);
 #ifdef USE_AUTH
     if ( url->auth )
         bytes += (size_t)snprintf(buf + bytes, HEADER_SIZE - bytes,
