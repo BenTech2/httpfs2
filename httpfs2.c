@@ -88,15 +88,15 @@ typedef struct url {
     SSL* ssl;
 #endif
     char * req_buf;
-    size_t req_buf_size;
-    size_t file_size;
+    off_t req_buf_size;
+    off_t file_size;
     time_t last_modified;
 } struct_url;
 
 static struct_url main_url;
 
-static ssize_t get_stat(struct_url*, struct stat * stbuf);
-static ssize_t get_data(struct_url*, off_t start, size_t size);
+static off_t get_stat(struct_url*, struct stat * stbuf);
+static off_t get_data(struct_url*, off_t start, size_t size);
 static int open_client_socket(struct_url *url);
 static int close_client_socket(struct_url *url);
 static int close_client_force(struct_url *url);
@@ -129,13 +129,13 @@ static char b64_encode_table[64] = {
 static char * b64_encode(unsigned const char* ptr, int len) {
     char * space;
     int ptr_idx;
-    unsigned char c = 0;
-    unsigned char d = 0;
+    int c = 0;
+    int d = 0;
     int space_idx = 0;
     int phase = 0;
 
     /*FIXME calculate the occupied space properly*/
-    int size = (len * 3) /2 + 5;
+    size_t size = (len * 3) /2 + 5;
     space = malloc(size+1);
     space[size] = 0;
 
@@ -926,7 +926,7 @@ plain_report(const char * reason, const char * method,
 
 static ssize_t
 parse_header(struct_url *url, const char * buf, ssize_t bytes,
-        const char * method, size_t * content_length, int expect)
+        const char * method, off_t * content_length, int expect)
 {
     /* FIXME check the header parser */
     int status;
@@ -1041,7 +1041,7 @@ parse_header(struct_url *url, const char * buf, ssize_t bytes,
 
 static ssize_t
 exchange(struct_url *url, char * buf, const char * method,
-        size_t * content_length, off_t start, off_t end, size_t * header_length)
+        off_t * content_length, off_t start, off_t end, size_t * header_length)
 {
     ssize_t res;
     ssize_t bytes;
@@ -1152,7 +1152,8 @@ static ssize_t get_data(struct_url *url, off_t start, size_t size)
     ssize_t bytes;
     off_t end = start + size - 1;
     char * destination = url->req_buf;
-    size_t content_length, header_length;
+    off_t content_length;
+    size_t header_length;
 
     bytes = exchange(url, buf, "GET", &content_length,
             start, end, &header_length);
