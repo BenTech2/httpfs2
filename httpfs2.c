@@ -42,6 +42,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <time.h>
+#include <stddef.h>
 
 #ifdef USE_THREAD
 #include <pthread.h>
@@ -70,7 +71,7 @@ static char* argv0;
 
 typedef struct url {
     int proto;
-    int timeout;
+    long timeout;
     char * host; /*hostname*/
     int port;
     char * path; /*get path*/
@@ -88,7 +89,7 @@ typedef struct url {
     SSL* ssl;
 #endif
     char * req_buf;
-    off_t req_buf_size;
+    size_t req_buf_size;
     off_t file_size;
     time_t last_modified;
 } struct_url;
@@ -96,7 +97,7 @@ typedef struct url {
 static struct_url main_url;
 
 static off_t get_stat(struct_url*, struct stat * stbuf);
-static off_t get_data(struct_url*, off_t start, size_t size);
+static ssize_t get_data(struct_url*, off_t start, size_t size);
 static int open_client_socket(struct_url *url);
 static int close_client_socket(struct_url *url);
 static int close_client_force(struct_url *url);
@@ -126,7 +127,7 @@ static char b64_encode_table[64] = {
  ** bytes generated.  Base-64 encoding takes up 4/3 the space of the original,
  ** plus a bit for end-padding.  3/2+5 gives a safe margin.
  */
-static char * b64_encode(unsigned const char* ptr, int len) {
+static char * b64_encode(unsigned const char* ptr, long len) {
     char * space;
     int ptr_idx;
     int c = 0;
@@ -135,7 +136,7 @@ static char * b64_encode(unsigned const char* ptr, int len) {
     int phase = 0;
 
     /*FIXME calculate the occupied space properly*/
-    size_t size = (len * 3) /2 + 5;
+    size_t size = ((size_t)len * 3) /2 + 5;
     space = malloc(size+1);
     space[size] = 0;
 
@@ -191,7 +192,7 @@ static int httpfs_stat(fuse_ino_t ino, struct stat *stbuf)
                     struct_url * url = thread_setup();
                     stbuf->st_mode = S_IFREG | 0444;
                     stbuf->st_nlink = 1;
-                    return get_stat(url, stbuf);
+                    return (int) get_stat(url, stbuf);
                 }; break;
 
         default:
@@ -251,7 +252,7 @@ static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name,
     memset(&stbuf, 0, sizeof(stbuf));
     stbuf.st_ino = ino;
     fuse_add_direntry(req, b->p + oldsize, b->size - oldsize, name, &stbuf,
-            b->size);
+            (off_t) b->size);
 }
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
@@ -259,9 +260,11 @@ static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name,
 static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize,
         off_t off, size_t maxsize)
 {
+    assert(off >= 0);
+
     if (off < bufsize)
         return fuse_reply_buf(req, buf + off,
-                min(bufsize - off, maxsize));
+                min(bufsize - (size_t)off, maxsize));
     else
         return fuse_reply_buf(req, NULL, 0);
 }
@@ -309,13 +312,13 @@ static void httpfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
     (void) fi;
 
     struct_url * url = thread_setup();
-    int res;
+    ssize_t res;
 
     assert(ino == 2);
 
     assert(url->file_size >= off);
 
-    size=min(size, url->file_size - off);
+    size=min(size, (size_t)(url->file_size - off));
 
     if(url->file_size == off) {
         /* Handling of EOF is not well documented, returning EOF as error
@@ -341,7 +344,7 @@ static void httpfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
         assert(errno);
         fuse_reply_err(req, errno);
     }else{
-        fuse_reply_buf(req, url->req_buf, res);
+        fuse_reply_buf(req, url->req_buf, (size_t)res);
     }
 }
 
@@ -498,22 +501,23 @@ static int parse_url(const char * url, struct_url* res)
         fprintf(stderr, "No hostname in url: %s\n", url_orig);
         return -1;
     }
-    res->host = strndup(url, strchr(url, host_end) -url);
+    res->host = strndup(url, (size_t)(strchr(url, host_end) - url));
 
     /* Get the file name. */
     url = strchr(url, path_start);
     const char * end = url + strlen(url);
     end--;
-    //handle broken urls with multiple slashes
+
+    /* Handle broken urls with multiple slashes. */
     while((end > url) && (*end == '/')) end--;
     end++;
     if((path_start == 0) || (end == url)
-            || (strncmp(url, "/", end - url) ==  0)){
+            || (strncmp(url, "/", (size_t)(end - url)) ==  0)){
         res->name = strdup(res->host);
     }else{
         while(strchr(url, '/') && (strchr(url, '/') < end))
             url = strchr(url, '/') + 1;
-        res->name = strndup(url, end - url);
+        res->name = strndup(url, (size_t)(end - url));
     }
 
     return res->proto;
@@ -599,9 +603,9 @@ int main(int argc, char *argv[])
     }
     close_client_socket(&main_url);
     struct stat st;
-    long long size = get_stat(&main_url, &st);
+    off_t size = get_stat(&main_url, &st);
     if(size >= 0) {
-        fprintf(stderr, "file size: \t%lld\n", size);
+        fprintf(stderr, "file size: \t%zd\n", size);
     }else{
         return 3;
     }
@@ -736,8 +740,8 @@ static struct_url * thread_setup(void) { return &main_url; }
 #endif
 
 
-static int read_client_socket(struct_url *url, void * buf, size_t len) {
-    int res;
+static ssize_t read_client_socket(struct_url *url, void * buf, size_t len) {
+    ssize_t res;
     struct timeval timeout;
     timeout.tv_sec = url->timeout;
     timeout.tv_usec = 0;
@@ -805,7 +809,8 @@ static int open_client_socket(struct_url *url) {
     struct hostent *he;
     struct sockaddr_in sa;
 #endif /* USE_IPV6 */
-    int sa_len, sock_family, sock_type, sock_protocol;
+    socklen_t sa_len;
+    int sock_family, sock_type, sock_protocol;
 
     if(url->sock_type == SOCK_KEEPALIVE) return url->sock_type;
     if(url->sock_type != SOCK_CLOSED) close_client_socket(url);
@@ -925,7 +930,7 @@ plain_report(const char * reason, const char * method,
  */
 
 static ssize_t
-parse_header(struct_url *url, const char * buf, ssize_t bytes,
+parse_header(struct_url *url, const char * buf, size_t bytes,
         const char * method, off_t * content_length, int expect)
 {
     /* FIXME check the header parser */
@@ -946,26 +951,26 @@ parse_header(struct_url *url, const char * buf, ssize_t bytes,
     }
     end = ptr;
     while(1){
-        end = memchr(end + 1, '\n', bytes - (end - ptr));
+        end = memchr(end + 1, '\n', bytes - (size_t)(end - ptr));
         if(!end || ((end + 1) >= (ptr + bytes)) ) {
             plain_report ("reply does not contain end of header!",
                     method, buf, bytes);
             errno = EIO;
             return -1;
         }
-        if(mempref(end, "\n\r\n", bytes - (end - ptr))) break;
+        if(mempref(end, "\n\r\n", bytes - (size_t)(end - ptr))) break;
     }
-    size_t header_len = (end + 3) - ptr;
+    ssize_t header_len = (end + 3) - ptr;
 
     end = memchr(ptr, '\n', bytes);
     char * http = "HTTP/1.1 ";
-    if(!mempref(ptr, http, end - ptr) || !isdigit( *(ptr + strlen(http))) ) {
+    if(!mempref(ptr, http, (size_t)(end - ptr)) || !isdigit( *(ptr + strlen(http))) ) {
         plain_report ("reply does not contain status!",
-                method, buf, header_len);
+                method, buf, (size_t)header_len);
         errno = EIO;
         return -1;
     }
-    status = strtol( ptr + strlen(http), (char **)&ptr, 10);
+    status = (int)strtol( ptr + strlen(http), (char **)&ptr, 10);
     if (status != expect) {
         fprintf(stderr, "%s: %s: failed with status: %d%.*s.\n",
                 argv0, method, status, (int)((end - ptr) - 1), ptr);
@@ -1002,30 +1007,30 @@ parse_header(struct_url *url, const char * buf, ssize_t bytes,
                 url->sock_type = SOCK_OPEN;
             return header_len;
         }
-        end = memchr(ptr, '\n', bytes - (ptr - buf));
-        if( mempref(ptr, content_length_str, end - ptr)
+        end = memchr(ptr, '\n', bytes - (size_t)(ptr - buf));
+        if( mempref(ptr, content_length_str, (size_t)(end - ptr))
                 && isdigit( *(ptr + strlen(content_length_str))) ){
             *content_length = atoll(ptr + strlen(content_length_str));
             seen_length = 1;
             continue;
         }
-        if( mempref(ptr, accept, end - ptr) ){
+        if( mempref(ptr, accept, (size_t)(end - ptr)) ){
             seen_accept = 1;
             continue;
         }
-        if( mempref(ptr, date, end - ptr) ){
+        if( mempref(ptr, date, (size_t)(end - ptr)) ){
             memset(&tm, 0, sizeof(tm));
             if(!strptime(ptr + strlen(date),
                         "%n%a, %d %b %Y %T %Z", &tm)){
                 plain_report("invalid time",
                         method, ptr + strlen(date),
-                        (end - ptr) - strlen(date)) ;
+                        (size_t)(end - ptr) - strlen(date)) ;
                 continue;
             }
             url->last_modified = mktime(&tm);
             continue;
         }
-        if( mempref(ptr, close, end - ptr) ){
+        if( mempref(ptr, close, (size_t)(end - ptr)) ){
             seen_close = 1;
         }
     }
@@ -1044,24 +1049,23 @@ exchange(struct_url *url, char * buf, const char * method,
         off_t * content_length, off_t start, off_t end, size_t * header_length)
 {
     ssize_t res;
-    ssize_t bytes;
+    size_t bytes;
     int range = (end > 0);
 
     /* Build request buffer, starting with the request method. */
 
-    bytes = snprintf(buf, HEADER_SIZE, "%s %s HTTP/1.1\r\nHost: %s\r\n",
+    bytes = (size_t)snprintf(buf, HEADER_SIZE, "%s %s HTTP/1.1\r\nHost: %s\r\n",
             method, url->path, url->host);
-    bytes += snprintf(buf + bytes, HEADER_SIZE - bytes,
+    bytes += (size_t)snprintf(buf + bytes, HEADER_SIZE - bytes,
             "User-Agent: %s %s\r\n", __FILE__, VERSION);
-    if (range) bytes += snprintf(buf + bytes, HEADER_SIZE - bytes,
-                "Range: bytes=%llu-%llu\r\n",
-                (unsigned long long) start, (unsigned long long) end);
+    if (range) bytes += (size_t)snprintf(buf + bytes, HEADER_SIZE - bytes,
+                "Range: bytes=%zd-%zd\r\n", start, end);
 #ifdef USE_AUTH
     if ( url->auth )
-        bytes += snprintf(buf + bytes, HEADER_SIZE - bytes,
+        bytes += (size_t)snprintf(buf + bytes, HEADER_SIZE - bytes,
                 "Authorization: Basic %s\r\n", url->auth);
 #endif
-    bytes += snprintf(buf + bytes, HEADER_SIZE - bytes, "\r\n");
+    bytes += (size_t)snprintf(buf + bytes, HEADER_SIZE - bytes, "\r\n");
 
 
     /* Now actually send it. */
@@ -1108,7 +1112,7 @@ exchange(struct_url *url, char * buf, const char * method,
         } else break;
         /* Not reached */
     }
-    bytes = res;
+    bytes = (size_t)res;
 
     res = parse_header(url, buf, bytes, method, content_length,
             range ? 206 : 200);
@@ -1117,9 +1121,9 @@ exchange(struct_url *url, char * buf, const char * method,
         return res;
     }
 
-    if (header_length) *header_length = res;
+    if (header_length) *header_length = (size_t)res;
 
-    return bytes;
+    return (ssize_t)bytes;
 }
 
 /*
@@ -1127,7 +1131,7 @@ exchange(struct_url *url, char * buf, const char * method,
  * to determine the file size
  */
 
-static ssize_t get_stat(struct_url *url, struct stat * stbuf) {
+static off_t get_stat(struct_url *url, struct stat * stbuf) {
     char buf[HEADER_SIZE];
 
     if( exchange(url, buf, "HEAD", &(url->file_size), 0, 0, 0) < 0 )
@@ -1150,7 +1154,7 @@ static ssize_t get_data(struct_url *url, off_t start, size_t size)
     char buf[HEADER_SIZE];
     const char * b;
     ssize_t bytes;
-    off_t end = start + size - 1;
+    off_t end = start + (off_t)size - 1;
     char * destination = url->req_buf;
     off_t content_length;
     size_t header_length;
@@ -1161,17 +1165,17 @@ static ssize_t get_data(struct_url *url, off_t start, size_t size)
 
     if (content_length != size) {
         plain_report("didn't yield the whole piece.", "GET", 0, 0);
-        size = min(content_length, size);
+        size = min((size_t)content_length, size);
     }
 
 
     b = buf + header_length;
 
     bytes -= (b - buf);
-    memcpy(destination, b, bytes);
-    size -= bytes;
+    memcpy(destination, b, (size_t)bytes);
+    size -= (size_t)bytes;
     destination +=bytes;
-    for (; size > 0; size -= bytes, destination += bytes) {
+    for (; size > 0; size -= (size_t)bytes, destination += bytes) {
 
         bytes = read_client_socket(url, destination, size);
         if (bytes < 0) {
@@ -1185,5 +1189,5 @@ static ssize_t get_data(struct_url *url, off_t start, size_t size)
 
     close_client_socket(url);
 
-    return end - start + 1 - size;
+    return (ssize_t)(end - start) + 1 - (ssize_t)size;
 }

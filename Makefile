@@ -1,5 +1,5 @@
 MAIN_CFLAGS :=  -g -Os -Wall $(shell pkg-config fuse --cflags)
-MAIN_CPPFLAGS := -Wall -Wno-unused-function -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE
+MAIN_CPPFLAGS := -Wall -Wno-unused-function -Wconversion -Wtype-limits -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE
 THR_CPPFLAGS := -DUSE_THREAD
 THR_LDFLAGS := -lpthread
 SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config openssl --cflags)
