@@ -56,9 +56,9 @@ clean_recursive:
 
 # Rules to automatically make a Debian package
 
-package = $(shell parsechangelog | grep ^Source: | sed -e s,'^Source: ',,)
-version = $(shell parsechangelog | grep ^Version: | sed -e s,'^Version: ',, -e 's,-.*,,')
-revision = $(shell parsechangelog | grep ^Version: | sed -e -e 's,.*-,,')
+package = $(shell dpkg-parsechangelog | grep ^Source: | sed -e s,'^Source: ',,)
+version = $(shell dpkg-parsechangelog | grep ^Version: | sed -e s,'^Version: ',, -e 's,-.*,,')
+revision = $(shell dpkg-parsechangelog | grep ^Version: | sed -e -e 's,.*-,,')
 architecture = $(shell dpkg --print-architecture)
 tar_dir = $(package)-$(version)
 tar_gz   = $(tar_dir).tar.gz
