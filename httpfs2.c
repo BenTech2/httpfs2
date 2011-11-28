@@ -95,6 +95,8 @@ typedef struct url {
     int port;
     char * path; /*get path*/
     char * name; /*file name*/
+    char * filename; /*content file name*/
+    int filename_from_header; /* take filename from HTTP header */
 #ifdef USE_AUTH
     char * auth; /*encoded auth data*/
 #endif
@@ -256,7 +258,7 @@ static void httpfs_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
     e.attr_timeout = 1.0;
     e.entry_timeout = 1.0;
 
-    if (parent != 1 || strcmp(name, main_url.name) != 0){
+    if (parent != 1 || strcmp(name, main_url.filename) != 0){
         e.ino = 0;
     } else {
         e.ino = 2;
@@ -315,7 +317,7 @@ static void httpfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
         memset(&b, 0, sizeof(b));
         dirbuf_add(req, &b, ".", 1);
         dirbuf_add(req, &b, "..", 1);
-        dirbuf_add(req, &b, main_url.name, 2);
+        dirbuf_add(req, &b, main_url.filename, 2);
         reply_buf_limited(req, b.p, b.size, off, size);
         free(b.p);
     }
@@ -372,6 +374,8 @@ static void httpfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
         url->req_buf_size = size;
         url->req_buf = malloc(size);
     }
+
+    fprintf(stderr, "httpfs_read: size: %lld b (%lld kb), off: %lld b (%lld kb)\n", (long long)url->req_buf_size, (long long)(url->req_buf_size/1024), (long long)off, (long long)(off/1024));
 
     if((res = get_data(url, off, size)) < 0){
         assert(errno);
@@ -751,6 +755,7 @@ static void print_url(FILE *f, const struct_url * url)
 #endif
     }
     fprintf(f, "file name: \t%s\n", url->name);
+    fprintf(f, "content file name: \t%s\n", url->filename);
     fprintf(f, "host name: \t%s\n", url->host);
     fprintf(f, "port number: \t%d\n", url->port);
     fprintf(f, "protocol: \t%s\n", protocol);
@@ -873,6 +878,7 @@ static int parse_url(char * _url, struct_url* res, enum url_flags flag)
         }
     } else
         assert(res->name);
+    res->filename = res->name;
 
     return res->proto;
 }
@@ -898,6 +904,7 @@ static void usage(void)
 #ifdef RETRY_ON_RESET
     fprintf(stderr, "\t -r \tnumber of times to retry connection on reset\n\t\t(default: %i)\n", RESET_RETRIES);
 #endif
+    fprintf(stderr, "\t -n \ttake filename from HTTP header (default: from url)\n");
     fprintf(stderr, "\t -t \tset socket timeout in seconds (default: %i)\n", TIMEOUT);
     fprintf(stderr, "\tmount-parameters should include the mount point\n");
 }
@@ -942,6 +949,8 @@ int main(int argc, char *argv[])
                           }else{
                               fork_terminal = 0;
                           }
+                          break;
+                case 'n': main_url.filename_from_header = 1;
                           break;
 #ifdef USE_SSL
                 case '2': main_url.md2 = GNUTLS_VERIFY_ALLOW_SIGN_RSA_MD2;
@@ -1553,6 +1562,7 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
     char * accept = "Accept-Ranges: bytes";
     char * range = "Content-Range: bytes";
     char * date = "Last-Modified: ";
+    char * content_disposition_str = "Content-Disposition: attachment; filename=\"";
     char * close = "Connection: close";
     struct tm tm;
     while(1)
@@ -1598,6 +1608,13 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
         if( mempref(ptr, accept, (size_t)(end - ptr), 0) ){
             seen_accept = 1;
             continue;
+        }
+        if( url->filename_from_header ){
+            if(mempref(ptr, content_disposition_str, (size_t)(end - ptr), 0) ){
+                url->filename = (char *)ptr + strlen(content_disposition_str);
+                url->filename = strndup(url->filename, (size_t)(end - url->filename) - 1);
+                continue;
+            }
         }
         if( mempref(ptr, date, (size_t)(end - ptr), 0) ){
             memset(&tm, 0, sizeof(tm));
