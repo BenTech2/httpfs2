@@ -1,14 +1,14 @@
 MAIN_CFLAGS :=  -g -Os -Wall $(shell pkg-config fuse --cflags)
-MAIN_CPPFLAGS := -Wall -Wno-unused-function -Wconversion -Wtype-limits -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE
+MAIN_CPPFLAGS := -Wall -Wno-unused-function -Wconversion -Wtype-limits -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE -DRETRY_ON_RESET
 THR_CPPFLAGS := -DUSE_THREAD
 THR_LDFLAGS := -lpthread
-SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config openssl --cflags)
-SSL_LDFLAGS := $(shell pkg-config openssl --libs)
+SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config gnutls --cflags)
+SSL_LDFLAGS := $(shell pkg-config gnutls --libs)
 MAIN_LDFLAGS := $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl// -e s/-pthread// -e "s/  / /g")
 
 intermediates =
 
-variants = _mt #_ssl _ssl_mt
+variants = _mt _ssl _ssl_mt
 
 binbase = httpfs2
 
