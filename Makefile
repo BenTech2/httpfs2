@@ -1,8 +1,9 @@
 MAIN_CFLAGS :=  -g -Os -Wall $(shell pkg-config fuse --cflags)
-MAIN_CPPFLAGS := -Wall -Wno-unused-function -Wconversion -Wtype-limits -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE -DRETRY_ON_RESET
+MAIN_CPPFLAGS := -Wall -Wno-unused-function -Wconversion -Wtype-limits -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE
 THR_CPPFLAGS := -DUSE_THREAD
 THR_LDFLAGS := -lpthread
-SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config gnutls --cflags)
+CERT_STORE := /etc/ssl/certs/ca-certificates.crt
+SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config gnutls --cflags) -DCERT_STORE=\"$(CERT_STORE)\"
 SSL_LDFLAGS := $(shell pkg-config gnutls --libs)
 MAIN_LDFLAGS := $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl// -e s/-pthread// -e "s/  / /g")
 
@@ -43,16 +44,16 @@ clean_recursive:
 	a2x -f manpage $<
 
 %_ssl: $*
-	$(MAKE) CPPFLAGS="$(CPPFLAGS) $(SSL_CPPFLAGS)" LDFLAGS="$(LDFLAGS) $(SSL_LDFLAGS)" binsuffix=_ssl$(binsuffix) $*
+	$(MAKE) CPPFLAGS='$(CPPFLAGS) $(SSL_CPPFLAGS)' LDFLAGS='$(LDFLAGS) $(SSL_LDFLAGS)' binsuffix=_ssl$(binsuffix) $*
 
 %_mt: $*
-	$(MAKE) CPPFLAGS="$(CPPFLAGS) $(THR_CPPFLAGS)" LDFLAGS="$(LDFLAGS) $(THR_LDFLAGS)" binsuffix=_mt$(binsuffix) $*
+	$(MAKE) CPPFLAGS='$(CPPFLAGS) $(THR_CPPFLAGS)' LDFLAGS='$(LDFLAGS) $(THR_LDFLAGS)' binsuffix=_mt$(binsuffix) $*
 
 %_lstr: $*
-	$(MAKE) CPPFLAGS="$(CPPFLAGS) -DNEED_STRNDUP -U_XOPEN_SOURCE -D_XOPEN_SOURCE=500" binsuffix=_lstr$(binsuffix) $*
+	$(MAKE) CPPFLAGS='$(CPPFLAGS) -DNEED_STRNDUP -U_XOPEN_SOURCE -D_XOPEN_SOURCE=500' binsuffix=_lstr$(binsuffix) $*
 
 %_rst: $*
-	$(MAKE) CPPFLAGS="$(CPPFLAGS) -DRETRY_ON_RESET" binsuffix=_rst$(binsuffix) $*
+	$(MAKE) CPPFLAGS='$(CPPFLAGS) -DRETRY_ON_RESET' binsuffix=_rst$(binsuffix) $*
 
 # Rules to automatically make a Debian package
 
