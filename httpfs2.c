@@ -547,6 +547,9 @@ static int init_url(struct_url* url)
     memset(url, 0, sizeof(url));
     url->sock_type = SOCK_CLOSED;
     url->timeout = TIMEOUT;
+#ifdef USE_SSL
+    url->cafile = CERT_STORE;
+#endif
     return 0;
 }
 
