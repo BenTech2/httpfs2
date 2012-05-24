@@ -448,10 +448,10 @@ verify_certificate_callback (gnutls_session_t session)
         ssl_error(ret, session, "verify certificate");
         return GNUTLS_E_CERTIFICATE_ERROR;
     }
-    if (status & GNUTLS_CERT_INSECURE_ALGORITHM)
-        printf ("The server certificate uses an insecure algorithm.\n");
     if (status & GNUTLS_CERT_INVALID)
         printf ("The server certificate is NOT trusted.\n");
+    if (status & GNUTLS_CERT_INSECURE_ALGORITHM)
+        printf ("The server certificate uses an insecure algorithm.\n");
     if (status & GNUTLS_CERT_SIGNER_NOT_FOUND)
         printf ("The server certificate hasn’t got a known issuer.\n");
     if (status & GNUTLS_CERT_REVOKED)
@@ -478,7 +478,9 @@ verify_certificate_callback (gnutls_session_t session)
         return GNUTLS_E_CERTIFICATE_ERROR;
     }
     /* This is not a real world example, since we only check the first
-     * certificate in the given chain. ??? FIXME what more needs to be checked?
+     * certificate in the given chain.
+     * ??? FIXME what more needs to be checked? Do servers send unrelated certs?
+     * Seems to be considered real world enough in gnutls3 docs.
      */
     ret = gnutls_x509_crt_import (cert, &cert_list[0], GNUTLS_X509_FMT_DER);
     if (ret < 0)
@@ -493,15 +495,14 @@ verify_certificate_callback (gnutls_session_t session)
         return GNUTLS_E_CERTIFICATE_ERROR;
     }
     gnutls_x509_crt_deinit (cert);
-    /* There does not seem to be a definitive list of these constants.
-     * Just use what is in the example.
+    /*
+     * It the status includes GNUTLS_CERT_INVALID whenever
+     * there is a problem and the other flags are just informative.
+     * At least the flags I managed to trigger behave that way
+     * and so is constructed the example in gnutls 3 docs.
+     * Did not find any explanation of the flags in the docs.
      */
-    if (status & (GNUTLS_CERT_INVALID |
-                GNUTLS_CERT_INSECURE_ALGORITHM |
-                GNUTLS_CERT_SIGNER_NOT_FOUND |
-                GNUTLS_CERT_REVOKED |
-                GNUTLS_CERT_EXPIRED |
-                GNUTLS_CERT_NOT_ACTIVATED))
+    if (status & GNUTLS_CERT_INVALID)
         return GNUTLS_E_CERTIFICATE_ERROR;
     /* notify gnutls to continue handshake normally */
     return 0;
