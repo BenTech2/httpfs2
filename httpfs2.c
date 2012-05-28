@@ -1091,17 +1091,9 @@ static int open_client_socket(struct_url *url) {
                 r = gnutls_certificate_allocate_credentials (&url->sc); /* docs suggest to share creds */
             if (url->cafile) {
                 if (!r)
-                    gnutls_certificate_set_x509_trust_file (url->sc, url->cafile, GNUTLS_X509_FMT_PEM);
-                if (!r) {
-                    /* did not work as trustfile, try as cert */
-                    gnutls_datum_t data = load_file(url->cafile);
-                    gnutls_x509_crt_t cert;
-                    gnutls_x509_crt_init(&cert);
-                    r = gnutls_x509_crt_import(cert, &data, GNUTLS_X509_FMT_PEM);
-                    unload_file(data);
-                    if (!r)
-                        r = gnutls_certificate_set_x509_trust(url->sc, &cert, 1);
-                }
+                    r = gnutls_certificate_set_x509_trust_file (url->sc, url->cafile, GNUTLS_X509_FMT_PEM);
+                if (r>0)
+                    fprintf(stderr, "%s: SSL init: loaded %i CA certificate(s).\n", argv0, r);
                 if (r>0) r = 0;
             }
             if (!r)
