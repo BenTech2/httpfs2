@@ -90,6 +90,7 @@ typedef struct url {
     unsigned md5;
     unsigned md2;
     int ssl_initialized;
+    int ssl_connected;
     gnutls_certificate_credentials_t sc;
     gnutls_session_t ss;
     const char * cafile;
@@ -424,6 +425,85 @@ unload_file (gnutls_datum_t data)
     free (data.data);
 }
 
+/* This function will print some details of the
+ * given session.
+ *
+ * Stolen from the GNUTLS docs.
+ */
+    int
+print_ssl_info (gnutls_session_t session)
+{
+    const char *tmp;
+    gnutls_credentials_type_t cred;
+    gnutls_kx_algorithm_t kx;
+    int dhe, ecdh;
+    dhe = ecdh = 0;
+    /* print the key exchange’s algorithm name
+    */
+    kx = gnutls_kx_get (session);
+    tmp = gnutls_kx_get_name (kx);
+    printf ("- Key Exchange: %s\n", tmp);
+    /* Check the authentication type used and switch
+     * to the appropriate.
+     */
+    cred = gnutls_auth_get_type (session);
+    switch (cred)
+    {
+        case GNUTLS_CRD_CERTIFICATE:
+            /* certificate authentication */
+            /* Check if we have been using ephemeral Diffie-Hellman.
+            */
+            if (kx == GNUTLS_KX_DHE_RSA || kx == GNUTLS_KX_DHE_DSS)
+                dhe = 1;
+#if (GNUTLS_VERSION_MAJOR > 3 )
+            else if (kx == GNUTLS_KX_ECDHE_RSA || kx == GNUTLS_KX_ECDHE_ECDSA)
+                ecdh = 1;
+#endif
+            /* cert should have been printed when it was verified */
+            break;
+        default:
+            printf("Not a x509 sesssion !?!\n");
+
+    }
+#if (GNUTLS_VERSION_MAJOR > 3 )
+    /* switch */
+    if (ecdh != 0)
+        printf ("- Ephemeral ECDH using curve %s\n",
+                gnutls_ecc_curve_get_name (gnutls_ecc_curve_get (session)));
+    else
+#endif
+        if (dhe != 0)
+            printf ("- Ephemeral DH using prime of %d bits\n",
+                    gnutls_dh_get_prime_bits (session));
+    /* print the protocol’s name (ie TLS 1.0)
+    */
+    tmp = gnutls_protocol_get_name (gnutls_protocol_get_version (session));
+    printf ("- Protocol: %s\n", tmp);
+    /* print the certificate type of the peer.
+     * ie X.509
+     */
+    tmp =
+        gnutls_certificate_type_get_name (gnutls_certificate_type_get (session));
+    printf ("- Certificate Type: %s\n", tmp);
+    /* print the compression algorithm (if any)
+    */
+    tmp = gnutls_compression_get_name (gnutls_compression_get (session));
+    printf ("- Compression: %s\n", tmp);
+    /* print the name of the cipher used.
+     * ie 3DES.
+     */
+    tmp = gnutls_cipher_get_name (gnutls_cipher_get (session));
+    printf ("- Cipher: %s\n", tmp);
+    /* Print the MAC algorithms name.
+     * ie SHA1
+     */
+    tmp = gnutls_mac_get_name (gnutls_mac_get (session));
+    printf ("- MAC: %s\n", tmp);
+    printf ("Note: SSL paramaters may change as new connections are established to the server.\n", tmp);
+    return 0;
+}
+
+
 
 /* This function will try to verify the peer’s certificate, and
  * also check if the hostname matches, and the activation, expiration dates.
@@ -438,7 +518,10 @@ verify_certificate_callback (gnutls_session_t session)
     unsigned int cert_list_size;
     int ret;
     gnutls_x509_crt_t cert;
-    const char *hostname = gnutls_session_get_ptr (session);
+    gnutls_datum_t data = {0};
+    struct_url * url = gnutls_session_get_ptr (session);
+    const char *hostname = url->host;
+
     /* This verification function uses the trusted CAs in the credentials
      * structure. So you must have installed one or more CA certificates.
      */
@@ -478,7 +561,6 @@ verify_certificate_callback (gnutls_session_t session)
         return GNUTLS_E_CERTIFICATE_ERROR;
     }
     /* Check the hostname matches the certificate.
-     * FIXME handle difference in trailing dot.
      */
     ret = gnutls_x509_crt_import (cert, &cert_list[0], GNUTLS_X509_FMT_DER);
     if (ret < 0)
@@ -486,11 +568,47 @@ verify_certificate_callback (gnutls_session_t session)
         ssl_error(ret, session, "parsing certificate");
         return GNUTLS_E_CERTIFICATE_ERROR;
     }
+    if (!(url->ssl_connected)) if (!gnutls_x509_crt_print (cert, GNUTLS_CRT_PRINT_FULL, &data)) {
+        printf("%s", data.data);
+        gnutls_free(data.data);
+    }
     if (!hostname || !gnutls_x509_crt_check_hostname (cert, hostname))
     {
-        printf ("The server certificate’s owner does not match hostname ’%s’\n",
-                hostname);
-        return GNUTLS_E_CERTIFICATE_ERROR;
+        int found = 0;
+        if (hostname) {
+            int i;
+            size_t len = strlen(hostname);
+            if (*(hostname+len-1) == '.') len--;
+            if (!(url->ssl_connected)) printf ("Server hostname verification failed. Trying to peek into the cert.\n");
+            for (i=0;;i++) {
+                char * dn = NULL;
+                size_t dn_size = 0;
+                int dn_ret = 0;
+                int match=0;
+                gnutls_x509_crt_get_dn_by_oid(cert, GNUTLS_OID_X520_COMMON_NAME, i, 0, dn, &dn_size);
+                if (dn_size) dn = malloc(dn_size + 1); /* nul not counted */
+                if (dn)
+                    dn_ret = gnutls_x509_crt_get_dn_by_oid(cert, GNUTLS_OID_X520_COMMON_NAME, i, 0, dn, &dn_size);
+                if (!dn_ret){
+                    if (dn) {
+                        if (*(dn+dn_size-1) == '.') dn_size--;
+                        if (len == dn_size)
+                            match = ! strncmp(dn, hostname, len);
+                        if (match) found = 1;
+                        if (!(url->ssl_connected)) printf("Cert CN(%i): %s: %c\n", i, dn, match?'*':'X');
+                    }}
+                else
+                    ssl_error(dn_ret, session, "getting cert subject data");
+                if (dn) free(dn);
+                if (dn_ret || !dn)
+                    break;
+            }
+        }
+        if(!found){
+            printf ("The server certificate’s owner does not match hostname ’%s’\n",
+                    hostname);
+            return GNUTLS_E_CERTIFICATE_ERROR;
+        }
     }
     gnutls_x509_crt_deinit (cert);
     /*
@@ -782,6 +900,11 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Connection failed.\n");
         return 3;
     }
+#ifdef USE_SSL
+    else {
+        print_ssl_info(main_url.ss);
+    }
+#endif
     close_client_socket(&main_url);
     struct stat st;
     off_t size = get_stat(&main_url, &st);
@@ -1105,7 +1228,7 @@ static int open_client_socket(struct_url *url) {
         }
 
         r = gnutls_init(&url->ss, GNUTLS_CLIENT);
-        if (!r) gnutls_session_set_ptr(url->ss, url->host); /* used in cert verifier */
+        if (!r) gnutls_session_set_ptr(url->ss, url); /* used in cert verifier */
         if (!r) r = gnutls_priority_set_direct(url->ss, ps, &errp);
         if (!r) r = gnutls_credentials_set(url->ss, GNUTLS_CRD_CERTIFICATE, url->sc);
         if (!r) gnutls_transport_set_ptr(url->ss, (gnutls_transport_ptr_t) (intptr_t) url->sockfd);
@@ -1119,6 +1242,7 @@ static int open_client_socket(struct_url *url) {
             errno = EIO;
             return -1;
         }
+        url->ssl_connected = 1; /* Prevent printing cert data over and over again */
     }
 #endif
     return url->sock_type = SOCK_OPEN;
