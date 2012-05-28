@@ -477,10 +477,8 @@ verify_certificate_callback (gnutls_session_t session)
         printf ("No server certificate was found!\n");
         return GNUTLS_E_CERTIFICATE_ERROR;
     }
-    /* This is not a real world example, since we only check the first
-     * certificate in the given chain.
-     * ??? FIXME what more needs to be checked? Do servers send unrelated certs?
-     * Seems to be considered real world enough in gnutls3 docs.
+    /* Check the hostname matches the certificate.
+     * FIXME handle difference in trailing dot.
      */
     ret = gnutls_x509_crt_import (cert, &cert_list[0], GNUTLS_X509_FMT_DER);
     if (ret < 0)
@@ -498,9 +496,6 @@ verify_certificate_callback (gnutls_session_t session)
     /*
      * It the status includes GNUTLS_CERT_INVALID whenever
      * there is a problem and the other flags are just informative.
-     * At least the flags I managed to trigger behave that way
-     * and so is constructed the example in gnutls 3 docs.
-     * Did not find any explanation of the flags in the docs.
      */
     if (status & GNUTLS_CERT_INVALID)
         return GNUTLS_E_CERTIFICATE_ERROR;
