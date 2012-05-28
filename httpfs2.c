@@ -723,7 +723,7 @@ static int parse_url(const char * url, struct_url* res)
     if (strncmp(http, url, strlen(http)) == 0) {
         url += strlen(http);
         res->proto = PROTO_HTTP;
-        res->port = 80; 
+        res->port = 80;
 #ifdef USE_SSL
     } else if (strncmp(https, url, strlen(https)) == 0) {
         url += strlen(https);
@@ -797,7 +797,7 @@ static void usage(void)
         fprintf(stderr, "%s >>> Version: %s <<<\n", __FILE__, VERSION);
         fprintf(stderr, "usage:  %s [-c [console]] "
 #ifdef USE_SSL
-                "[-a file] [-d n] [-5] [-2]"
+                "[-a file] [-d n] [-5] [-2] "
 #endif
                 "[-f] [-t timeout] [-r] url mount-parameters\n\n", argv0);
         fprintf(stderr, "\t -c \tuse console for standard input/output/error (default: %s)\n", CONSOLE);
@@ -1216,7 +1216,7 @@ static int open_client_socket(struct_url *url) {
             }
             if (!r)
                 gnutls_certificate_set_verify_function (url->sc, verify_certificate_callback);
-            gnutls_certificate_set_verify_flags (url->sc, GNUTLS_VERIFY_ALLOW_X509_V1_CA_CRT /* suggested */ 
+            gnutls_certificate_set_verify_flags (url->sc, GNUTLS_VERIFY_ALLOW_X509_V1_CA_CRT /* suggested */
                     | url->md5 | url->md2 ); /* oprional for old cert compat */
             if (!r) url->ssl_initialized = 1;
             gnutls_global_set_log_level((int)url->ssl_log_level);
