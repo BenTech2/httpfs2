@@ -376,11 +376,21 @@ static char * strndup(const char * str, size_t n){
 }
 #endif
 
-static int mempref(const char * mem, const char * pref, size_t size)
+static int mempref(const char * mem, const char * pref, size_t size, int case_sensitive)
 {
     /* return true if found */
    if (size < strlen(pref)) return 0;
-   return ! memcmp(mem, pref, strlen(pref));
+   if (case_sensitive)
+       return ! memcmp(mem, pref, strlen(pref));
+   else {
+       int i;
+       for (i = 0; i < strlen(pref); i++)
+           /* Unless somebody calling setlocale() behind our back locale should be C.  */
+           /* It is important to not uppercase in languages like Turkish.  */
+           if (tolower(mem[i]) != tolower(pref[i]))
+               return 0;
+       return 1;
+   }
 }
 
 #ifdef USE_SSL
@@ -1296,13 +1306,13 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
             errno = EIO;
             return -1;
         }
-        if(mempref(end, "\n\r\n", bytes - (size_t)(end - ptr))) break;
+        if(mempref(end, "\n\r\n", bytes - (size_t)(end - ptr), 1)) break;
     }
     ssize_t header_len = (end + 3) - ptr;
 
     end = memchr(ptr, '\n', bytes);
     char * http = "HTTP/1.1 ";
-    if(!mempref(ptr, http, (size_t)(end - ptr)) || !isdigit( *(ptr + strlen(http))) ) {
+    if(!mempref(ptr, http, (size_t)(end - ptr), 1) || !isdigit( *(ptr + strlen(http))) ) {
         plain_report ("reply does not contain status!",
                 method, buf, (size_t)header_len);
         errno = EIO;
@@ -1346,17 +1356,17 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
             return header_len;
         }
         end = memchr(ptr, '\n', bytes - (size_t)(ptr - buf));
-        if( mempref(ptr, content_length_str, (size_t)(end - ptr))
+        if( mempref(ptr, content_length_str, (size_t)(end - ptr), 0)
                 && isdigit( *(ptr + strlen(content_length_str))) ){
             *content_length = atoll(ptr + strlen(content_length_str));
             seen_length = 1;
             continue;
         }
-        if( mempref(ptr, accept, (size_t)(end - ptr)) ){
+        if( mempref(ptr, accept, (size_t)(end - ptr), 0) ){
             seen_accept = 1;
             continue;
         }
-        if( mempref(ptr, date, (size_t)(end - ptr)) ){
+        if( mempref(ptr, date, (size_t)(end - ptr), 0) ){
             memset(&tm, 0, sizeof(tm));
             if(!strptime(ptr + strlen(date),
                         "%n%a, %d %b %Y %T %Z", &tm)){
@@ -1368,7 +1378,7 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
             url->last_modified = mktime(&tm);
             continue;
         }
-        if( mempref(ptr, close, (size_t)(end - ptr)) ){
+        if( mempref(ptr, close, (size_t)(end - ptr), 0) ){
             seen_close = 1;
         }
     }
