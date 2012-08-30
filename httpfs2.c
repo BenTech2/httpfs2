@@ -509,7 +509,7 @@ print_ssl_info (gnutls_session_t session)
      */
     tmp = gnutls_mac_get_name (gnutls_mac_get (session));
     printf ("- MAC: %s\n", tmp);
-    printf ("Note: SSL paramaters may change as new connections are established to the server.\n", tmp);
+    printf ("Note: SSL paramaters may change as new connections are established to the server.\n");
     return 0;
 }
 
