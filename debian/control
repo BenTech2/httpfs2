@@ -6,7 +6,7 @@ Build-Depends:
  debhelper (>= 7.0.50~),
  asciidoc, xmlto,
  libfuse-dev (>> 2.6), pkg-config,
- libgnutls-dev,
+ libgnutls-dev (>= 2.10~),
 Standards-Version: 3.8.4
 Homepage: http://sourceforge.net/projects/httpfs/
 
