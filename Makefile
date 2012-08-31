@@ -9,7 +9,7 @@ MAIN_LDFLAGS := $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl// -e 
 
 intermediates =
 
-variants = _mt _ssl _ssl_mt
+variants = -mt -ssl -ssl-mt
 
 binbase = httpfs2
 
@@ -32,28 +32,28 @@ httpfs2$(binsuffix): httpfs2.c
 httpfs2%.1: httpfs2.1
 	ln -sf httpfs2.1 $@
 
-clean: clean_recursive_full
+clean: clean-recursive-full
 
-clean_recursive:
+clean-recursive:
 	rm -f $(targets) $(intermediates)
 
-%_full:
+%-full:
 	$(MAKE) $* $(addprefix $*,$(variants))
 
 %.1: %.1.txt
 	a2x -f manpage $<
 
-%_ssl: $*
-	$(MAKE) CPPFLAGS='$(CPPFLAGS) $(SSL_CPPFLAGS)' LDFLAGS='$(LDFLAGS) $(SSL_LDFLAGS)' binsuffix=_ssl$(binsuffix) $*
+%-ssl: $*
+	$(MAKE) CPPFLAGS='$(CPPFLAGS) $(SSL_CPPFLAGS)' LDFLAGS='$(LDFLAGS) $(SSL_LDFLAGS)' binsuffix=-ssl$(binsuffix) $*
 
-%_mt: $*
-	$(MAKE) CPPFLAGS='$(CPPFLAGS) $(THR_CPPFLAGS)' LDFLAGS='$(LDFLAGS) $(THR_LDFLAGS)' binsuffix=_mt$(binsuffix) $*
+%-mt: $*
+	$(MAKE) CPPFLAGS='$(CPPFLAGS) $(THR_CPPFLAGS)' LDFLAGS='$(LDFLAGS) $(THR_LDFLAGS)' binsuffix=-mt$(binsuffix) $*
 
-%_lstr: $*
-	$(MAKE) CPPFLAGS='$(CPPFLAGS) -DNEED_STRNDUP -U_XOPEN_SOURCE -D_XOPEN_SOURCE=500' binsuffix=_lstr$(binsuffix) $*
+%-lstr: $*
+	$(MAKE) CPPFLAGS='$(CPPFLAGS) -DNEED_STRNDUP -U_XOPEN_SOURCE -D_XOPEN_SOURCE=500' binsuffix=-lstr$(binsuffix) $*
 
-%_rst: $*
-	$(MAKE) CPPFLAGS='$(CPPFLAGS) -DRETRY_ON_RESET' binsuffix=_rst$(binsuffix) $*
+%-rst: $*
+	$(MAKE) CPPFLAGS='$(CPPFLAGS) -DRETRY_ON_RESET' binsuffix=-rst$(binsuffix) $*
 
 # Rules to automatically make a Debian package
 
