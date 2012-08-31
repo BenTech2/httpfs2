@@ -1330,6 +1330,7 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
 
     char * content_length_str = "Content-Length: ";
     char * accept = "Accept-Ranges: bytes";
+    char * range = "Content-Range: bytes";
     char * date = "Last-Modified: ";
     char * close = "Connection: close";
     struct tm tm;
@@ -1367,6 +1368,10 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
                 && isdigit( *(ptr + strlen(content_length_str))) ){
             *content_length = atoll(ptr + strlen(content_length_str));
             seen_length = 1;
+            continue;
+        }
+        if( mempref(ptr, range, (size_t)(end - ptr), 0) ){
+            seen_accept = 1;
             continue;
         }
         if( mempref(ptr, accept, (size_t)(end - ptr), 0) ){
