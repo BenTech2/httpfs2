@@ -1337,23 +1337,30 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
     {
         ptr = end+1;
         if( !(ptr < buf + (header_len - 4))){
+            if(seen_accept && seen_length){
+                if(url->sock_type == SOCK_OPEN && !seen_close)
+                    url->sock_type = SOCK_KEEPALIVE;
+                if(url->sock_type == SOCK_KEEPALIVE && seen_close)
+                    url->sock_type = SOCK_OPEN;
+                return header_len;
+            }
+            close_client_force(url);
+            errno = EIO;
             if(! seen_accept){
                 plain_report("server must Accept-Range: bytes",
                         method, buf, 0);
-                errno = EIO;
                 return -1;
             }
             if(! seen_length){
                 plain_report("reply didn't contain Content-Length!",
                         method, buf, 0);
-                errno = EIO;
                 return -1;
             }
-            if(url->sock_type == SOCK_OPEN && !seen_close)
-                url->sock_type = SOCK_KEEPALIVE;
-            if(url->sock_type == SOCK_KEEPALIVE && seen_close)
-                url->sock_type = SOCK_OPEN;
-            return header_len;
+            /* fallback - should not reach */
+            plain_report("error parsing header.",
+                    method, buf, 0);
+            return -1;
+
         }
         end = memchr(ptr, '\n', bytes - (size_t)(ptr - buf));
         if( mempref(ptr, content_length_str, (size_t)(end - ptr), 0)
