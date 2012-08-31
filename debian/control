@@ -6,6 +6,7 @@ Build-Depends:
  debhelper (>= 7.0.50~),
  asciidoc, xmlto,
  libfuse-dev (>> 2.6), pkg-config,
+ libgnutls-dev,
 Standards-Version: 3.8.4
 Homepage: http://sourceforge.net/projects/httpfs/
 
@@ -17,3 +18,14 @@ Description: FUSE filesystem for mounting files from http servers
  httpfs2 is a FUSE based filesystem for mounting http or https URLS as files in
  the filesystem. There is no notion of listable directories in http so only a
  single URL can be mounted. The server must be able to send byte ranges.
+
+Package: httpfs2-ssl
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends},
+Recommends: fuse-utils
+Description: FUSE filesystem for mounting files from http servers (SSL enabled)
+ httpfs2 is a FUSE based filesystem for mounting http or https URLS as files in
+ the filesystem. There is no notion of listable directories in http so only a
+ single URL can be mounted. The server must be able to send byte ranges.
+ .
+ This package contains ssl-enabled binary.

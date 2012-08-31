@@ -1,3 +1,13 @@
+httpfs2 (0.1.5-1~test1) unstable; urgency=low
+
+  * New upstream release:
+    - 32bit clean (LP: #675920)
+    - case insensitive header comparison (LP: #1043544) (Closes: #651384)
+    - (Closes: #577718) (Closes: #641728)
+  * Add SSL enabled package.
+
+ -- Michal Suchanek <hramrach@gmail.com>  Fri, 31 Aug 2012 13:01:28 +0200
+
 httpfs2 (0.1.4-1) unstable; urgency=low
 
   * New upstream release:
