@@ -2,14 +2,18 @@ MAIN_CFLAGS :=  -g -Os -Wall $(shell pkg-config fuse --cflags)
 MAIN_CPPFLAGS := -Wall -Wno-unused-function -Wconversion -Wtype-limits -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE
 THR_CPPFLAGS := -DUSE_THREAD
 THR_LDFLAGS := -lpthread
-CERT_STORE := /etc/ssl/certs/ca-certificates.crt
-SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config gnutls --cflags) -DCERT_STORE=\"$(CERT_STORE)\"
-SSL_LDFLAGS := $(shell pkg-config gnutls --libs)
 MAIN_LDFLAGS := $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl// -e s/-pthread// -e "s/  / /g")
-
+variants := -mt
 intermediates =
 
-variants = -mt -ssl -ssl-mt
+ifeq ($(shell pkg-config --atleast-version 2.10 gnutls ; echo $$?), 0)
+
+    variants += -ssl -ssl-mt
+
+    CERT_STORE := /etc/ssl/certs/ca-certificates.crt
+    SSL_CPPFLAGS := -DUSE_SSL $(shell pkg-config gnutls --cflags) -DCERT_STORE=\"$(CERT_STORE)\"
+    SSL_LDFLAGS := $(shell pkg-config gnutls --libs)
+endif
 
 binbase = httpfs2
 
