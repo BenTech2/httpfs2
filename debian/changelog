@@ -1,4 +1,4 @@
-httpfs2 (0.1.5-1~test1) unstable; urgency=low
+httpfs2 (0.1.5-1) unstable; urgency=low
 
   * New upstream release:
     - 32bit clean (LP: #675920)

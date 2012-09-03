@@ -61,7 +61,7 @@ static pthread_key_t url_key;
 #define TIMEOUT 30
 #define CONSOLE "/dev/console"
 #define HEADER_SIZE 1024
-#define VERSION "0.1.4 \"Monolith\""
+#define VERSION "0.1.5 \"The Message\""
 
 static char* argv0;
 
