@@ -69,6 +69,7 @@ static char* argv0;
 #define SOCK_CLOSED 0
 #define SOCK_OPEN 1
 #define SOCK_KEEPALIVE 2
+#define TNAM_LEN 9
 
 typedef struct url {
     int proto;
@@ -99,6 +100,7 @@ typedef struct url {
     size_t req_buf_size;
     off_t file_size;
     time_t last_modified;
+    char tname[TNAM_LEN];
 } struct_url;
 
 static struct_url main_url;
@@ -197,6 +199,7 @@ static int httpfs_stat(fuse_ino_t ino, struct stat *stbuf)
 
         case 2: {
                     struct_url * url = thread_setup();
+                    fprintf(stderr, "Thread %s stat()\n", url->tname); /*DEBUG*/
                     stbuf->st_mode = S_IFREG | 0444;
                     stbuf->st_nlink = 1;
                     return (int) get_stat(url, stbuf);
@@ -853,6 +856,7 @@ int main(int argc, char *argv[])
     putenv("TZ=");/*UTC*/
     argv0 = argv[0];
     init_url(&main_url);
+    strncpy(main_url.tname, "main", TNAM_LEN - 1);
 
     while( argv[1] && (*(argv[1]) == '-') )
     {
@@ -1000,12 +1004,16 @@ int main(int argc, char *argv[])
  */
 
 static int close_client_socket(struct_url *url) {
-    if (url->sock_type == SOCK_KEEPALIVE) return SOCK_KEEPALIVE;
+    if (url->sock_type == SOCK_KEEPALIVE) {
+        fprintf(stderr, "Thread %s keeping socket open.\n", url->tname); /*DEBUG*/
+        return SOCK_KEEPALIVE;
+    }
     return close_client_force(url);
 }
 
 static int close_client_force(struct_url *url) {
     if(url->sock_type != SOCK_CLOSED){
+        fprintf(stderr, "Thread %s closing socket.\n", url->tname); /*DEBUG*/
 #ifdef USE_SSL
         if (url->proto == PROTO_HTTPS) {
             gnutls_deinit(url->ss);
@@ -1021,16 +1029,18 @@ static int close_client_force(struct_url *url) {
 static void destroy_url_copy(void * urlptr)
 {
     if(urlptr){
-        fprintf(stderr, "%s: Thread %08lX ended.\n", argv0, pthread_self());
+        fprintf(stderr, "%s: Thread %08lX ended.\n", argv0, pthread_self()); /*DEBUG*/
         close_client_force(urlptr);
         free(urlptr);
     }
 }
 
-static void * create_url_copy(const struct_url * url)
+static struct_url * create_url_copy(const struct_url * url)
 {
-    void * res = malloc(sizeof(struct_url));
+    struct_url * res = malloc(sizeof(struct_url));
     memcpy(res, url, sizeof(struct_url));
+    memset(res->tname, 0, TNAM_LEN);
+    snprintf(res->tname, TNAM_LEN - 1, "%08lX", pthread_self());
     return res;
 }
 
@@ -1038,7 +1048,7 @@ static struct_url * thread_setup(void)
 {
     struct_url * res = pthread_getspecific(url_key);
     if(!res) {
-        fprintf(stderr, "%s: Thread %08lX started.\n", argv0, pthread_self());
+        fprintf(stderr, "%s: Thread %08lX started.\n", argv0, pthread_self()); /*DEBUG*/
         res = create_url_copy(&main_url);
         pthread_setspecific(url_key, res);
     }
@@ -1132,7 +1142,10 @@ static int open_client_socket(struct_url *url) {
     socklen_t sa_len;
     int sock_family, sock_type, sock_protocol;
 
-    if(url->sock_type == SOCK_KEEPALIVE) return url->sock_type;
+    if(url->sock_type == SOCK_KEEPALIVE) {
+        fprintf(stderr, "Thread %s reusing keepalive socket.\n", url->tname); /*DEBUG*/
+        return url->sock_type;
+        }
     if(url->sock_type != SOCK_CLOSED) close_client_socket(url);
 
     (void) memset((void*) &sa, 0, sizeof(sa));
