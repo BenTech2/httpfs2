@@ -667,7 +667,7 @@ static char * url_encode(char * path) {
 
 static int init_url(struct_url* url)
 {
-    memset(url, 0, sizeof(url));
+    memset(url, 0, sizeof(*url));
     url->sock_type = SOCK_CLOSED;
     url->timeout = TIMEOUT;
 #ifdef USE_SSL
