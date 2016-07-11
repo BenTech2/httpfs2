@@ -451,6 +451,10 @@ print_ssl_info (gnutls_session_t session)
     gnutls_kx_algorithm_t kx;
     int dhe, ecdh;
     dhe = ecdh = 0;
+    if (!session) {
+        printf("No SSL session data.\n");
+        return 0;
+    }
     /* print the key exchange’s algorithm name
     */
     kx = gnutls_kx_get (session);
