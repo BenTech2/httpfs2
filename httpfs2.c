@@ -1020,6 +1020,7 @@ static int close_client_force(struct_url *url) {
         fprintf(stderr, "Thread %s closing socket.\n", url->tname); /*DEBUG*/
 #ifdef USE_SSL
         if (url->proto == PROTO_HTTPS) {
+            gnutls_bye(url->ss, GNUTLS_SHUT_RDWR);
             gnutls_deinit(url->ss);
         }
 #endif
@@ -1257,6 +1258,8 @@ static int open_client_socket(struct_url *url) {
         r = gnutls_init(&url->ss, GNUTLS_CLIENT);
         if (!r) gnutls_session_set_ptr(url->ss, url); /* used in cert verifier */
         if (!r) r = gnutls_priority_set_direct(url->ss, ps, &errp);
+        if (!r) errp = NULL;
+        /* alternative to gnutls_priority_set_direct: if (!r) gnutls_set_default_priority(url->ss); */
         if (!r) r = gnutls_credentials_set(url->ss, GNUTLS_CRD_CERTIFICATE, url->sc);
         if (!r) gnutls_transport_set_ptr(url->ss, (gnutls_transport_ptr_t) (intptr_t) url->sockfd);
         if (!r) r = gnutls_handshake (url->ss); /* FIXME gnutls_error_is_fatal is recommended here */
