@@ -817,12 +817,14 @@ static void usage(void)
             "[-a file] [-d n] [-5] [-2] "
 #endif
             "[-f] [-t timeout] [-r] url mount-parameters\n\n", argv0);
+#ifdef USE_SSL
+    fprintf(stderr, "\t -2 \tAllow RSA-MD2 server certificate\n");
+    fprintf(stderr, "\t -5 \tAllow RSA-MD5 server certificate\n");
+    fprintf(stderr, "\t -a \tCA file used to verify server certificate\n");
+#endif
     fprintf(stderr, "\t -c \tuse console for standard input/output/error (default: %s)\n", CONSOLE);
 #ifdef USE_SSL
-    fprintf(stderr, "\t -a \tCA file used to verify server certificate\n");
     fprintf(stderr, "\t -d \tGNUTLS debug level\n");
-    fprintf(stderr, "\t -5 \tAllow RSA-MD5 cert\n");
-    fprintf(stderr, "\t -2 \tAllow RSA-MD2 cert\n");
 #endif
     fprintf(stderr, "\t -f \tstay in foreground - do not fork\n");
 #ifdef RETRY_ON_RESET
