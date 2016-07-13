@@ -203,11 +203,12 @@ static int httpfs_stat(fuse_ino_t ino, struct stat *stbuf)
                     stbuf->st_mode = S_IFREG | 0444;
                     stbuf->st_nlink = 1;
                     return (int) get_stat(url, stbuf);
-                }; break;
+                }
+                break;
 
         default:
-            errno = ENOENT;
-            return -1;
+                errno = ENOENT;
+                return -1;
     }
     return 0;
 }
@@ -382,18 +383,18 @@ static char * strndup(const char * str, size_t n){
 static int mempref(const char * mem, const char * pref, size_t size, int case_sensitive)
 {
     /* return true if found */
-   if (size < strlen(pref)) return 0;
-   if (case_sensitive)
-       return ! memcmp(mem, pref, strlen(pref));
-   else {
-       int i;
-       for (i = 0; i < strlen(pref); i++)
-           /* Unless somebody calling setlocale() behind our back locale should be C.  */
-           /* It is important to not uppercase in languages like Turkish.  */
-           if (tolower(mem[i]) != tolower(pref[i]))
-               return 0;
-       return 1;
-   }
+    if (size < strlen(pref)) return 0;
+    if (case_sensitive)
+        return ! memcmp(mem, pref, strlen(pref));
+    else {
+        int i;
+        for (i = 0; i < strlen(pref); i++)
+            /* Unless somebody calling setlocale() behind our back locale should be C.  */
+            /* It is important to not uppercase in languages like Turkish.  */
+            if (tolower(mem[i]) != tolower(pref[i]))
+                return 0;
+        return 1;
+    }
 }
 
 #ifdef USE_SSL
@@ -443,7 +444,7 @@ unload_file (gnutls_datum_t data)
  *
  * Stolen from the GNUTLS docs.
  */
-    int
+int
 print_ssl_info (gnutls_session_t session)
 {
     const char *tmp;
@@ -577,8 +578,7 @@ verify_certificate_callback (gnutls_session_t session)
         fprintf(stderr, "No server certificate was found!\n");
         return GNUTLS_E_CERTIFICATE_ERROR;
     }
-    /* Check the hostname matches the certificate.
-     */
+    /* Check the hostname matches the certificate. */
     ret = gnutls_x509_crt_import (cert, &cert_list[0], GNUTLS_X509_FMT_DER);
     if (ret < 0)
     {
@@ -811,25 +811,25 @@ static int parse_url(const char * url, struct_url* res)
 
 static void usage(void)
 {
-        fprintf(stderr, "%s >>> Version: %s <<<\n", __FILE__, VERSION);
-        fprintf(stderr, "usage:  %s [-c [console]] "
+    fprintf(stderr, "%s >>> Version: %s <<<\n", __FILE__, VERSION);
+    fprintf(stderr, "usage:  %s [-c [console]] "
 #ifdef USE_SSL
-                "[-a file] [-d n] [-5] [-2] "
+            "[-a file] [-d n] [-5] [-2] "
 #endif
-                "[-f] [-t timeout] [-r] url mount-parameters\n\n", argv0);
-        fprintf(stderr, "\t -c \tuse console for standard input/output/error (default: %s)\n", CONSOLE);
+            "[-f] [-t timeout] [-r] url mount-parameters\n\n", argv0);
+    fprintf(stderr, "\t -c \tuse console for standard input/output/error (default: %s)\n", CONSOLE);
 #ifdef USE_SSL
-        fprintf(stderr, "\t -a \tCA file used to verify server certificate\n");
-        fprintf(stderr, "\t -d \tGNUTLS debug level\n");
-        fprintf(stderr, "\t -5 \tAllow RSA-MD5 cert\n");
-        fprintf(stderr, "\t -2 \tAllow RSA-MD2 cert\n");
+    fprintf(stderr, "\t -a \tCA file used to verify server certificate\n");
+    fprintf(stderr, "\t -d \tGNUTLS debug level\n");
+    fprintf(stderr, "\t -5 \tAllow RSA-MD5 cert\n");
+    fprintf(stderr, "\t -2 \tAllow RSA-MD2 cert\n");
 #endif
-        fprintf(stderr, "\t -f \tstay in foreground - do not fork\n");
+    fprintf(stderr, "\t -f \tstay in foreground - do not fork\n");
 #ifdef RETRY_ON_RESET
-        fprintf(stderr, "\t -r \tretry connection on reset\n");
+    fprintf(stderr, "\t -r \tretry connection on reset\n");
 #endif
-        fprintf(stderr, "\t -t \tset socket timeout in seconds (default: %i)\n", TIMEOUT);
-        fprintf(stderr, "\tmount-parameters should include the mount point\n");
+    fprintf(stderr, "\t -t \tset socket timeout in seconds (default: %i)\n", TIMEOUT);
+    fprintf(stderr, "\tmount-parameters should include the mount point\n");
 }
 
 #define shift { if(!argv[1]) { usage(); return 4; };\
@@ -1074,7 +1074,7 @@ static ssize_t read_client_socket(struct_url *url, void * buf, size_t len) {
     if (url->proto == PROTO_HTTPS) {
         res = gnutls_record_recv(url->ss, buf, len);
         if (res <= 0) ssl_error((int)res, url->ss, "read");
-     } else
+    } else
 #endif
     {
         res = read(url->sockfd, buf, len);
@@ -1095,10 +1095,10 @@ write_client_socket(struct_url *url, const void * buf, size_t len)
         if (url->proto == PROTO_HTTPS) {
             res = gnutls_record_send(url->ss, buf, len);
             if (res <= 0) ssl_error((int)res, url->ss, "write");
-        /*
-         * It is suggested to retry GNUTLS_E_INTERRUPTED and GNUTLS_E_AGAIN
-         * However, retrying only causes delay in practice. FIXME
-         */
+            /*
+             * It is suggested to retry GNUTLS_E_INTERRUPTED and GNUTLS_E_AGAIN
+             * However, retrying only causes delay in practice. FIXME
+             */
         } else
 #endif
         {
@@ -1149,7 +1149,7 @@ static int open_client_socket(struct_url *url) {
     if(url->sock_type == SOCK_KEEPALIVE) {
         fprintf(stderr, "Thread %s reusing keepalive socket.\n", url->tname); /*DEBUG*/
         return url->sock_type;
-        }
+    }
     if(url->sock_type != SOCK_CLOSED) close_client_socket(url);
 
     (void) memset((void*) &sa, 0, sizeof(sa));
@@ -1436,14 +1436,13 @@ exchange(struct_url *url, char * buf, const char * method,
     bytes += (size_t)snprintf(buf + bytes, HEADER_SIZE - bytes,
             "User-Agent: %s %s\r\n", __FILE__, VERSION);
     if (range) bytes += (size_t)snprintf(buf + bytes, HEADER_SIZE - bytes,
-                "Range: bytes=%" PRIdMAX "-%" PRIdMAX "\r\n", (intmax_t)start, (intmax_t)end);
+            "Range: bytes=%" PRIdMAX "-%" PRIdMAX "\r\n", (intmax_t)start, (intmax_t)end);
 #ifdef USE_AUTH
     if ( url->auth )
         bytes += (size_t)snprintf(buf + bytes, HEADER_SIZE - bytes,
                 "Authorization: Basic %s\r\n", url->auth);
 #endif
     bytes += (size_t)snprintf(buf + bytes, HEADER_SIZE - bytes, "\r\n");
-
 
     /* Now actually send it. */
     while(1){
