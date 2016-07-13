@@ -820,9 +820,9 @@ static void usage(void)
 #ifdef USE_SSL
     fprintf(stderr, "\t -2 \tAllow RSA-MD2 server certificate\n");
     fprintf(stderr, "\t -5 \tAllow RSA-MD5 server certificate\n");
-    fprintf(stderr, "\t -a \tCA file used to verify server certificate\n");
+    fprintf(stderr, "\t -a \tCA file used to verify server certificate\n\t\t(default: %s)\n", CERT_STORE);
 #endif
-    fprintf(stderr, "\t -c \tuse console for standard input/output/error (default: %s)\n", CONSOLE);
+    fprintf(stderr, "\t -c \tuse console for standard input/output/error\n\t\t(default: %s)\n", CONSOLE);
 #ifdef USE_SSL
     fprintf(stderr, "\t -d \tGNUTLS debug level\n");
 #endif
