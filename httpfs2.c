@@ -61,19 +61,27 @@ static pthread_key_t url_key;
 #define TIMEOUT 30
 #define CONSOLE "/dev/console"
 #define HEADER_SIZE 1024
+#define MAX_REQUEST (32*1024)
+#define MAX_REDIRECTS 32
+#define TNAM_LEN 9
 #define VERSION "0.1.5 \"The Message\""
 
-static char* argv0;
+enum sock_state {
+    SOCK_CLOSED,
+    SOCK_OPEN,
+    SOCK_KEEPALIVE,
+};
 
-#define MAX_REQUEST (32*1024)
-#define SOCK_CLOSED 0
-#define SOCK_OPEN 1
-#define SOCK_KEEPALIVE 2
-#define TNAM_LEN 9
+enum url_flags {
+    URL_DUP,
+    URL_SAVE,
+    URL_DROP,
+};
 
 typedef struct url {
     int proto;
     long timeout;
+    char * url;
     char * host; /*hostname*/
     int port;
     char * path; /*get path*/
@@ -85,7 +93,9 @@ typedef struct url {
     int retry_reset; /*retry reset connections*/
 #endif
     int sockfd;
-    int sock_type;
+    enum sock_state sock_type;
+    int redirected;
+    int redirect_depth;
 #ifdef USE_SSL
     long ssl_log_level;
     unsigned md5;
@@ -104,6 +114,7 @@ typedef struct url {
 } struct_url;
 
 static struct_url main_url;
+static char* argv0;
 
 static off_t get_stat(struct_url*, struct stat * stbuf);
 static ssize_t get_data(struct_url*, off_t start, size_t size);
@@ -685,6 +696,8 @@ static int init_url(struct_url* url)
 
 static int free_url(struct_url* url)
 {
+    if(url->sock_type != SOCK_CLOSED)
+        close_client_force(url);
     if(url->host) free(url->host);
     url->host = 0;
     if(url->path) free(url->path);
@@ -695,8 +708,6 @@ static int free_url(struct_url* url)
     if(url->auth) free(url->auth);
     url->auth = 0;
 #endif
-    if(url->sock_type != SOCK_CLOSED)
-        close_client_force(url);
     url->port = 0;
     url->proto = 0; /* only after socket closed */
     url->file_size=0;
@@ -727,15 +738,39 @@ static void print_url(FILE *f, const struct_url * url)
 #endif
 }
 
-static int parse_url(const char * url, struct_url* res)
+static int parse_url(char * _url, struct_url* res, enum url_flags flag)
 {
-    const char * url_orig = url;
-    char* http = "http://";
+    const char * url_orig;
+    const char * url;
+    const char * http = "http://";
 #ifdef USE_SSL
-    char* https = "https://";
+    const char * https = "https://";
 #endif /* USE_SSL */
     int path_start = '/';
-    assert(url);
+
+    if (!_url)
+        _url = res->url;
+    assert(_url);
+    switch(flag) {
+        case URL_DUP:
+            _url = strdup(_url);
+        case URL_SAVE:
+            assert (_url != res->url);
+            if (res->url)
+                free(res->url);
+            res->url = _url;
+            break;
+        case URL_DROP:
+            assert (res->url);
+            break;
+    }
+    /* constify so compiler warns about modification */
+    url_orig = url = _url;
+
+    close_client_force(res);
+#ifdef USE_SSL
+    res->ssl_connected = 0;
+#endif
 
     if (strncmp(http, url, strlen(http)) == 0) {
         url += strlen(http);
@@ -753,6 +788,8 @@ static int parse_url(const char * url, struct_url* res)
     }
 
     /* determine if path was given */
+    if(res->path)
+        free(res->path);
     if(strchr(url, path_start))
         res->path = url_encode(strchr(url, path_start));
     else{
@@ -763,6 +800,8 @@ static int parse_url(const char * url, struct_url* res)
 
 #ifdef USE_AUTH
     /* Get user and password */
+    if(res->auth)
+        free(res->auth);
     if(strchr(url, '@') && (strchr(url, '@') < strchr(url, path_start))){
         res->auth = b64_encode((unsigned char *)url, strchr(url, '@') - url);
         url = strchr(url, '@') + 1;
@@ -787,6 +826,8 @@ static int parse_url(const char * url, struct_url* res)
         fprintf(stderr, "No hostname in url: %s\n", url_orig);
         return -1;
     }
+    if(res->host)
+        free(res->host);
     res->host = strndup(url, (size_t)(strchr(url, host_end) - url));
 
     /* Get the file name. */
@@ -797,6 +838,8 @@ static int parse_url(const char * url, struct_url* res)
     /* Handle broken urls with multiple slashes. */
     while((end > url) && (*end == '/')) end--;
     end++;
+    if(res->name)
+        free(res->name);
     if((path_start == 0) || (end == url)
             || (strncmp(url, "/", (size_t)(end - url)) ==  0)){
         res->name = strdup(res->host);
@@ -910,7 +953,7 @@ int main(int argc, char *argv[])
         usage();
         return 1;
     }
-    if(parse_url(argv[1], &main_url) == -1){
+    if(parse_url(argv[1], &main_url, URL_DUP) == -1){
         fprintf(stderr, "invalid url: %s\n", argv[1]);
         return 2;
     }
@@ -1022,6 +1065,7 @@ static int close_client_force(struct_url *url) {
         fprintf(stderr, "Thread %s closing socket.\n", url->tname); /*DEBUG*/
 #ifdef USE_SSL
         if (url->proto == PROTO_HTTPS) {
+            fprintf(stderr, "Thread %s closing SSL socket.\n", url->tname);
             gnutls_bye(url->ss, GNUTLS_SHUT_RDWR);
             gnutls_deinit(url->ss);
         }
@@ -1037,7 +1081,7 @@ static void destroy_url_copy(void * urlptr)
 {
     if(urlptr){
         fprintf(stderr, "%s: Thread %08lX ended.\n", argv0, pthread_self()); /*DEBUG*/
-        close_client_force(urlptr);
+        free_url(urlptr);
         free(urlptr);
     }
 }
@@ -1046,6 +1090,16 @@ static struct_url * create_url_copy(const struct_url * url)
 {
     struct_url * res = malloc(sizeof(struct_url));
     memcpy(res, url, sizeof(struct_url));
+    if(url->name)
+        res->name = strdup(url->name);
+    if(url->host)
+        res->host = strdup(url->host);
+    if(url->path)
+        res->path = strdup(url->path);
+#ifdef USE_AUTH
+    if(url->auth)
+        res->auth = strdup(url->auth);
+#endif
     memset(res->tname, 0, TNAM_LEN);
     snprintf(res->tname, TNAM_LEN - 1, "%08lX", pthread_self());
     return res;
@@ -1153,7 +1207,16 @@ static int open_client_socket(struct_url *url) {
         fprintf(stderr, "Thread %s reusing keepalive socket.\n", url->tname); /*DEBUG*/
         return url->sock_type;
     }
+
     if(url->sock_type != SOCK_CLOSED) close_client_socket(url);
+
+    if(url->redirected) {
+        fprintf(stderr, "Thread %s returning from redirect to master %s\n", url->tname, url->url);
+        url->redirect_depth = 0;
+        url->redirected = 0;
+        parse_url(NULL, url, URL_DROP);
+        print_url(stderr, url);
+    }
 
     (void) memset((void*) &sa, 0, sizeof(sa));
 
@@ -1257,6 +1320,7 @@ static int open_client_socket(struct_url *url) {
             return -1;
         }
 
+        fprintf(stderr, "Thread %s initializing SSL socket.\n", url->tname);
         r = gnutls_init(&url->ss, GNUTLS_CLIENT);
         if (!r) gnutls_session_set_ptr(url->ss, url); /* used in cert verifier */
         if (!r) r = gnutls_priority_set_direct(url->ss, ps, &errp);
@@ -1270,6 +1334,7 @@ static int open_client_socket(struct_url *url) {
             if (errp) fprintf(stderr, "%s: invalid SSL priority\n %s\n %*s\n", argv0, ps, (int)(errp - ps), "^");
             fprintf(stderr, "%s: %s:%d - ", argv0, url->host, url->port);
             ssl_error(r, url->ss, "SSL connection failed");
+            fprintf(stderr, "Thread %s closing SSL socket.\n", url->tname);
             gnutls_deinit(url->ss);
             errno = EIO;
             return -1;
@@ -1341,6 +1406,54 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
         return -1;
     }
     status = (int)strtol( ptr + strlen(http), (char **)&ptr, 10);
+    if (status == 301 || status == 302 || status == 307 || status == 303) {
+        char * location = "Location: ";
+        ptrdiff_t llen = (ptrdiff_t) strlen(location);
+
+        while(1) {
+            ptr = end+1;
+            if( !(ptr < buf + (header_len - 4))){
+                close_client_force(url);
+                plain_report("redirect did not contain a Location header!",
+                        method, buf, 0);
+                return -1;
+            }
+
+            end = memchr(ptr, '\n', bytes - (size_t)(ptr - buf));
+            if (mempref(ptr, location, (size_t)(end - ptr), 0) ){
+                size_t len = (size_t) (end - ptr - llen);
+                char * tmp = malloc(len + 1);
+                int res;
+
+                tmp[len] = 0;
+                strncpy(tmp, ptr + llen, len);
+
+                url->redirect_depth ++;
+                if (url->redirect_depth > MAX_REDIRECTS) {
+                    fprintf(stderr, "Server redirected %i times already. Giving up.", MAX_REDIRECTS);
+                    return -EIO;
+                }
+
+                if (status == 301) {
+                    fprintf(stderr, "Permanent redirect to %s\n", tmp);
+
+                    res = parse_url(tmp, url, URL_SAVE);
+                } else {
+                    fprintf(stderr, "Temporary redirect to %s\n", tmp);
+
+                    url->redirected = 1;
+                    res = parse_url(tmp, url, URL_DROP);
+                    free(tmp);
+                }
+
+                if(res < 0)
+                    return res;
+
+                print_url(stderr, url);
+                return -EAGAIN;
+            }
+        }
+    }
     if (status != expect) {
         fprintf(stderr, "%s: %s: failed with status: %d%.*s.\n",
                 argv0, method, status, (int)((end - ptr) - 1), ptr);
@@ -1434,6 +1547,7 @@ exchange(struct_url *url, char * buf, const char * method,
     size_t bytes;
     int range = (end > 0);
 
+req:
     /* Build request buffer, starting with the request method. */
 
     bytes = (size_t)snprintf(buf, HEADER_SIZE, "%s %s HTTP/1.1\r\nHost: %s\r\n",
@@ -1490,21 +1604,24 @@ exchange(struct_url *url, char * buf, const char * method,
         } else if (res <= 0) {
             errno_report("exchange: failed receving reply from server"); /* DEBUG */
             return res;
-        } else break;
-        /* Not reached */
+        } else {
+            bytes = (size_t)res;
+
+            res = parse_header(url, buf, bytes, method, content_length,
+                    range ? 206 : 200);
+            if (res == -EAGAIN) /* redirect */
+                goto req;
+
+            if (res <= 0){
+                plain_report("exchange: server error", method, buf, bytes);
+                return res;
+            }
+
+            if (header_length) *header_length = (size_t)res;
+
+            return (ssize_t)bytes;
+        }
     }
-    bytes = (size_t)res;
-
-    res = parse_header(url, buf, bytes, method, content_length,
-            range ? 206 : 200);
-    if (res <= 0){
-        plain_report("exchange: server error", method, buf, bytes);
-        return res;
-    }
-
-    if (header_length) *header_length = (size_t)res;
-
-    return (ssize_t)bytes;
 }
 
 /*
