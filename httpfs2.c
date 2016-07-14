@@ -63,7 +63,7 @@ static pthread_key_t url_key;
 #define HEADER_SIZE 1024
 #define MAX_REQUEST (32*1024)
 #define MAX_REDIRECTS 32
-#define TNAM_LEN 9
+#define TNAM_LEN 13
 #define VERSION "0.1.5 \"The Message\""
 
 enum sock_state {
@@ -111,7 +111,7 @@ typedef struct url {
     size_t req_buf_size;
     off_t file_size;
     time_t last_modified;
-    char tname[TNAM_LEN];
+    char tname[TNAM_LEN + 1];
 } struct_url;
 
 static struct_url main_url;
@@ -211,7 +211,7 @@ static int httpfs_stat(fuse_ino_t ino, struct stat *stbuf)
 
         case 2: {
                     struct_url * url = thread_setup();
-                    fprintf(stderr, "Thread %s stat()\n", url->tname); /*DEBUG*/
+                    fprintf(stderr, "%s: %s: stat()\n", argv0, url->tname); /*DEBUG*/
                     stbuf->st_mode = S_IFREG | 0444;
                     stbuf->st_nlink = 1;
                     return (int) get_stat(url, stbuf);
@@ -658,21 +658,23 @@ static void logfunc(int level, const char * str)
 
 static void ssl_error(int error, gnutls_session_t ss, const char * where)
 {
+    struct_url * url = thread_setup();
     const char * err_desc;
     if((error == GNUTLS_E_FATAL_ALERT_RECEIVED) || (error == GNUTLS_E_WARNING_ALERT_RECEIVED))
         err_desc = gnutls_alert_get_name(gnutls_alert_get(ss));
     else
         err_desc = gnutls_strerror(error);
 
-    fprintf(stderr, "%s: %s: %d %s.\n", argv0, where, error, err_desc);
+    fprintf(stderr, "%s: %s: %s: %d %s.\n", argv0, url->tname, where, error, err_desc);
     errno = EIO; /* FIXME is this used anywhere? */
 }
 #endif
 
 static void errno_report(const char * where)
 {
+    struct_url * url = thread_setup();
     int e = errno;
-    fprintf(stderr, "%s: %s: %d %s.\n", argv0, where, errno, strerror(errno));
+    fprintf(stderr, "%s: %s: %s: %d %s.\n", argv0, url->tname, where, errno, strerror(errno));
     errno = e;
 }
 
@@ -909,7 +911,7 @@ int main(int argc, char *argv[])
     putenv("TZ=");/*UTC*/
     argv0 = argv[0];
     init_url(&main_url);
-    strncpy(main_url.tname, "main", TNAM_LEN - 1);
+    strncpy(main_url.tname, "main", TNAM_LEN);
 
     while( argv[1] && (*(argv[1]) == '-') )
     {
@@ -1058,7 +1060,7 @@ int main(int argc, char *argv[])
 
 static int close_client_socket(struct_url *url) {
     if (url->sock_type == SOCK_KEEPALIVE) {
-        fprintf(stderr, "Thread %s keeping socket open.\n", url->tname); /*DEBUG*/
+        fprintf(stderr, "%s: %s: keeping socket open.\n", argv0, url->tname); /*DEBUG*/
         return SOCK_KEEPALIVE;
     }
     return close_client_force(url);
@@ -1066,10 +1068,10 @@ static int close_client_socket(struct_url *url) {
 
 static int close_client_force(struct_url *url) {
     if(url->sock_type != SOCK_CLOSED){
-        fprintf(stderr, "Thread %s closing socket.\n", url->tname); /*DEBUG*/
+        fprintf(stderr, "%s: %s: closing socket.\n", argv0, url->tname); /*DEBUG*/
 #ifdef USE_SSL
         if (url->proto == PROTO_HTTPS) {
-            fprintf(stderr, "Thread %s closing SSL socket.\n", url->tname);
+            fprintf(stderr, "%s: %s: closing SSL socket.\n", argv0, url->tname);
             gnutls_bye(url->ss, GNUTLS_SHUT_RDWR);
             gnutls_deinit(url->ss);
         }
@@ -1113,8 +1115,8 @@ static struct_url * create_url_copy(const struct_url * url)
     if(url->auth)
         res->auth = strdup(url->auth);
 #endif
-    memset(res->tname, 0, TNAM_LEN);
-    snprintf(res->tname, TNAM_LEN - 1, "%08lX", pthread_self());
+    memset(res->tname, 0, TNAM_LEN + 1);
+    snprintf(res->tname, TNAM_LEN, "%0*lX", TNAM_LEN, pthread_self());
     return res;
 }
 
@@ -1217,7 +1219,7 @@ static int open_client_socket(struct_url *url) {
     int sock_family, sock_type, sock_protocol;
 
     if(url->sock_type == SOCK_KEEPALIVE) {
-        fprintf(stderr, "Thread %s reusing keepalive socket.\n", url->tname); /*DEBUG*/
+        fprintf(stderr, "%s: %s: reusing keepalive socket.\n", argv0, url->tname); /*DEBUG*/
         return url->sock_type;
     }
 
@@ -1328,7 +1330,7 @@ static int open_client_socket(struct_url *url) {
             return -1;
         }
 
-        fprintf(stderr, "Thread %s initializing SSL socket.\n", url->tname);
+        fprintf(stderr, "%s: %s: initializing SSL socket.\n", argv0, url->tname);
         r = gnutls_init(&url->ss, GNUTLS_CLIENT);
         if (!r) gnutls_session_set_ptr(url->ss, url); /* used in cert verifier */
         if (!r) r = gnutls_priority_set_direct(url->ss, ps, &errp);
@@ -1342,7 +1344,7 @@ static int open_client_socket(struct_url *url) {
             if (errp) fprintf(stderr, "%s: invalid SSL priority\n %s\n %*s\n", argv0, ps, (int)(errp - ps), "^");
             fprintf(stderr, "%s: %s:%d - ", argv0, url->host, url->port);
             ssl_error(r, url->ss, "SSL connection failed");
-            fprintf(stderr, "Thread %s closing SSL socket.\n", url->tname);
+            fprintf(stderr, "%s: %s: closing SSL socket.\n", argv0, url->tname);
             gnutls_deinit(url->ss);
             errno = EIO;
             return -1;
@@ -1357,7 +1359,9 @@ static void
 plain_report(const char * reason, const char * method,
         const char * buf, size_t len)
 {
-    fprintf(stderr, "%s: %s: %s\n", argv0, method, reason);
+    struct_url * url = thread_setup();
+
+    fprintf(stderr, "%s: %s: %s: %s\n", argv0, url->tname, method, reason);
     fwrite(buf, len, 1, stderr);
     if(len && ( *(buf+len-1) != '\n')) fputc('\n', stderr);
 }
@@ -1438,16 +1442,16 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
 
                 url->redirect_depth ++;
                 if (url->redirect_depth > MAX_REDIRECTS) {
-                    fprintf(stderr, "Server redirected %i times already. Giving up.", MAX_REDIRECTS);
+                    fprintf(stderr, "%s: %s: server redirected %i times already. Giving up.", argv0, url->tname, MAX_REDIRECTS);
                     return -EIO;
                 }
 
                 if (status == 301) {
-                    fprintf(stderr, "Permanent redirect to %s\n", tmp);
+                    fprintf(stderr, "%s: %s: permanent redirect to %s\n", argv0, url->tname, tmp);
 
                     res = parse_url(tmp, url, URL_SAVE);
                 } else {
-                    fprintf(stderr, "Temporary redirect to %s\n", tmp);
+                    fprintf(stderr, "%s: %s: temporary redirect to %s\n", argv0, url->tname, tmp);
 
                     url->redirected = 1;
                     res = parse_url(tmp, url, URL_DROP);
