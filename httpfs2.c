@@ -63,7 +63,7 @@ static pthread_key_t url_key;
 #define HEADER_SIZE 1024
 #define MAX_REQUEST (32*1024)
 #define MAX_REDIRECTS 32
-#define TNAM_LEN 13
+#define TNAME_LEN 13
 #define VERSION "0.1.5 \"The Message\""
 
 enum sock_state {
@@ -111,7 +111,7 @@ typedef struct url {
     size_t req_buf_size;
     off_t file_size;
     time_t last_modified;
-    char tname[TNAM_LEN + 1];
+    char tname[TNAME_LEN + 1];
 } struct_url;
 
 static struct_url main_url;
@@ -911,7 +911,7 @@ int main(int argc, char *argv[])
     putenv("TZ=");/*UTC*/
     argv0 = argv[0];
     init_url(&main_url);
-    strncpy(main_url.tname, "main", TNAM_LEN);
+    strncpy(main_url.tname, "main", TNAME_LEN);
 
     while( argv[1] && (*(argv[1]) == '-') )
     {
@@ -1115,8 +1115,8 @@ static struct_url * create_url_copy(const struct_url * url)
     if(url->auth)
         res->auth = strdup(url->auth);
 #endif
-    memset(res->tname, 0, TNAM_LEN + 1);
-    snprintf(res->tname, TNAM_LEN, "%0*lX", TNAM_LEN, pthread_self());
+    memset(res->tname, 0, TNAME_LEN + 1);
+    snprintf(res->tname, TNAME_LEN, "%0*lX", TNAME_LEN, pthread_self());
     return res;
 }
 
@@ -1356,7 +1356,7 @@ static int open_client_socket(struct_url *url) {
 }
 
 static void
-plain_report(const char * reason, const char * method,
+http_report(const char * reason, const char * method,
         const char * buf, size_t len)
 {
     struct_url * url = thread_setup();
@@ -1392,7 +1392,7 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
 
     end = memchr(ptr, '\n', bytes);
     if(!end) {
-        plain_report ( "reply does not contain newline!", method, buf, 0);
+        http_report ( "reply does not contain newline!", method, buf, 0);
         errno = EIO;
         return -1;
     }
@@ -1400,7 +1400,7 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
     while(1){
         end = memchr(end + 1, '\n', bytes - (size_t)(end - ptr));
         if(!end || ((end + 1) >= (ptr + bytes)) ) {
-            plain_report ("reply does not contain end of header!",
+            http_report ("reply does not contain end of header!",
                     method, buf, bytes);
             errno = EIO;
             return -1;
@@ -1412,7 +1412,7 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
     end = memchr(ptr, '\n', bytes);
     char * http = "HTTP/1.1 ";
     if(!mempref(ptr, http, (size_t)(end - ptr), 1) || !isdigit( *(ptr + strlen(http))) ) {
-        plain_report ("reply does not contain status!",
+        http_report ("reply does not contain status!",
                 method, buf, (size_t)header_len);
         errno = EIO;
         return -1;
@@ -1426,7 +1426,7 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
             ptr = end+1;
             if( !(ptr < buf + (header_len - 4))){
                 close_client_force(url);
-                plain_report("redirect did not contain a Location header!",
+                http_report("redirect did not contain a Location header!",
                         method, buf, 0);
                 return -1;
             }
@@ -1495,17 +1495,17 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
             close_client_force(url);
             errno = EIO;
             if(! seen_accept){
-                plain_report("server must Accept-Range: bytes",
+                http_report("server must Accept-Range: bytes",
                         method, buf, 0);
                 return -1;
             }
             if(! seen_length){
-                plain_report("reply didn't contain Content-Length!",
+                http_report("reply didn't contain Content-Length!",
                         method, buf, 0);
                 return -1;
             }
             /* fallback - should not reach */
-            plain_report("error parsing header.",
+            http_report("error parsing header.",
                     method, buf, 0);
             return -1;
 
@@ -1529,7 +1529,7 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
             memset(&tm, 0, sizeof(tm));
             if(!strptime(ptr + strlen(date),
                         "%n%a, %d %b %Y %T %Z", &tm)){
-                plain_report("invalid time",
+                http_report("invalid time",
                         method, ptr + strlen(date),
                         (size_t)(end - ptr) - strlen(date)) ;
                 continue;
@@ -1625,7 +1625,7 @@ req:
                 goto req;
 
             if (res <= 0){
-                plain_report("exchange: server error", method, buf, bytes);
+                http_report("exchange: server error", method, buf, bytes);
                 return res;
             }
 
@@ -1674,7 +1674,7 @@ static ssize_t get_data(struct_url *url, off_t start, size_t size)
     if(bytes <= 0) return -1;
 
     if (content_length != size) {
-        plain_report("didn't yield the whole piece.", "GET", 0, 0);
+        http_report("didn't yield the whole piece.", "GET", 0, 0);
         size = min((size_t)content_length, size);
     }
 
