@@ -95,6 +95,7 @@ typedef struct url {
     int sockfd;
     enum sock_state sock_type;
     int redirected;
+    int redirect_followed;
     int redirect_depth;
 #ifdef USE_SSL
     long ssl_log_level;
@@ -830,24 +831,27 @@ static int parse_url(char * _url, struct_url* res, enum url_flags flag)
         free(res->host);
     res->host = strndup(url, (size_t)(strchr(url, host_end) - url));
 
-    /* Get the file name. */
-    url = strchr(url, path_start);
-    const char * end = url + strlen(url);
-    end--;
+    if(flag != URL_DROP) {
+        /* Get the file name. */
+        url = strchr(url, path_start);
+        const char * end = url + strlen(url);
+        end--;
 
-    /* Handle broken urls with multiple slashes. */
-    while((end > url) && (*end == '/')) end--;
-    end++;
-    if(res->name)
-        free(res->name);
-    if((path_start == 0) || (end == url)
-            || (strncmp(url, "/", (size_t)(end - url)) ==  0)){
-        res->name = strdup(res->host);
-    }else{
-        while(strchr(url, '/') && (strchr(url, '/') < end))
-            url = strchr(url, '/') + 1;
-        res->name = strndup(url, (size_t)(end - url));
-    }
+        /* Handle broken urls with multiple slashes. */
+        while((end > url) && (*end == '/')) end--;
+        end++;
+        if(res->name)
+            free(res->name);
+        if((path_start == 0) || (end == url)
+                || (strncmp(url, "/", (size_t)(end - url)) ==  0)){
+            res->name = strdup(res->host);
+        }else{
+            while(strchr(url, '/') && (strchr(url, '/') < end))
+                url = strchr(url, '/') + 1;
+            res->name = strndup(url, (size_t)(end - url));
+        }
+    } else
+        assert(res->name);
 
     return res->proto;
 }
@@ -1072,6 +1076,15 @@ static int close_client_force(struct_url *url) {
 #endif
         close(url->sockfd);
     }
+
+    if(url->redirected && url->redirect_followed) {
+        fprintf(stderr, "%s: %s: returning from redirect to master %s\n", argv0, url->tname, url->url);
+        url->redirect_depth = 0;
+        url->redirect_followed = 0;
+        url->redirected = 0;
+        parse_url(NULL, url, URL_DROP);
+        print_url(stderr, url);
+    }
     return url->sock_type = SOCK_CLOSED;
 }
 
@@ -1210,13 +1223,8 @@ static int open_client_socket(struct_url *url) {
 
     if(url->sock_type != SOCK_CLOSED) close_client_socket(url);
 
-    if(url->redirected) {
-        fprintf(stderr, "Thread %s returning from redirect to master %s\n", url->tname, url->url);
-        url->redirect_depth = 0;
-        url->redirected = 0;
-        parse_url(NULL, url, URL_DROP);
-        print_url(stderr, url);
-    }
+    if (url->redirected)
+        url->redirect_followed = 1;
 
     (void) memset((void*) &sa, 0, sizeof(sa));
 
