@@ -896,7 +896,7 @@ static void usage(void)
     fprintf(stderr, "\tmount-parameters should include the mount point\n");
 }
 
-#define shift { if(!argv[1]) { usage(); return 4; };\
+#define shift { if(!argv[1] || !argv[2]) { usage(); return 4; };\
     argc--; argv[1] = argv[0]; argv = argv + 1;}
 
 static int convert_num(long * num, char ** argv)
