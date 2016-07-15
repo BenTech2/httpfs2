@@ -1243,6 +1243,8 @@ static int open_client_socket(struct_url *url) {
     if (url->redirected)
         url->redirect_followed = 1;
 
+    fprintf(stderr, "%s: %s: connecting to %s port %i.\n", argv0, url->tname, url->host, url->port);
+
     (void) memset((void*) &sa, 0, sizeof(sa));
 
 #ifdef USE_IPV6
@@ -1251,8 +1253,8 @@ static int open_client_socket(struct_url *url) {
     hints.ai_socktype = SOCK_STREAM;
     (void) snprintf(portstr, sizeof(portstr), "%d", (int) url->port);
     if ((gaierr = getaddrinfo(url->host, portstr, &hints, &ai)) != 0) {
-        (void) fprintf(stderr, "%s: getaddrinfo %s - %s\n",
-                argv0, url->host, gai_strerror(gaierr));
+        (void) fprintf(stderr, "%s: %s: getaddrinfo %s - %s\n",
+                argv0, url->tname, url->host, gai_strerror(gaierr));
         errno = EIO;
         return -1;
     }
@@ -1269,14 +1271,14 @@ static int open_client_socket(struct_url *url) {
     if (aiv4 == NULL)
         aiv4 = aiv6;
     if (aiv4 == NULL) {
-        (void) fprintf(stderr, "%s: no valid address found for host %s\n",
-                argv0, url->host);
+        (void) fprintf(stderr, "%s: %s: no valid address found for host %s\n",
+                argv0, url->tname, url->host);
         errno = EIO;
         return -1;
     }
     if (sizeof(sa) < aiv4->ai_addrlen) {
-        (void) fprintf(stderr, "%s - sockaddr too small (%lu < %lu)\n",
-                url->host, (unsigned long) sizeof(sa),
+        (void) fprintf(stderr, "%s: %s: %s - sockaddr too small (%lu < %lu)\n",
+                argv0, url->tname, url->host, (unsigned long) sizeof(sa),
                 (unsigned long) aiv4->ai_addrlen);
         errno = EIO;
         return -1;
@@ -1292,7 +1294,7 @@ static int open_client_socket(struct_url *url) {
 
     he = gethostbyname(url->host);
     if (he == NULL) {
-        (void) fprintf(stderr, "%s: unknown host - %s\n", argv0, url->host);
+        (void) fprintf(stderr, "%s: %s: unknown host - %s\n", argv0, url->tname, url->host);
         errno = EIO;
         return -1;
     }
@@ -1308,7 +1310,6 @@ static int open_client_socket(struct_url *url) {
     url->sockfd = socket(sock_family, sock_type, sock_protocol);
     if (url->sockfd < 0) {
         errno_report("couldn't get socket");
-
         return -1;
     }
     if (connect(url->sockfd, (struct sockaddr*) &sa, sa_len) < 0) {
