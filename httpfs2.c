@@ -1093,6 +1093,7 @@ static int close_client_force(struct_url *url) {
 #endif
         close(url->sockfd);
     }
+    url->sock_type = SOCK_CLOSED;
 
     if(url->redirected && url->redirect_followed) {
         fprintf(stderr, "%s: %s: returning from redirect to master %s\n", argv0, url->tname, url->url);
@@ -1101,8 +1102,9 @@ static int close_client_force(struct_url *url) {
         url->redirected = 0;
         parse_url(NULL, url, URL_DROP);
         print_url(stderr, url);
+        return -EAGAIN;
     }
-    return url->sock_type = SOCK_CLOSED;
+    return url->sock_type;
 }
 
 #ifdef USE_THREAD
@@ -1615,18 +1617,22 @@ req:
             errno_report("exchange: sleeping");
             sleep(1U << url->resets);
             url->resets ++;
-            close_client_force(url);
+            if (close_client_force(url) == -EAGAIN)
+                goto req;
             continue;
         }
         url->resets = 0;
 #endif
         if (CONNFAIL) {
             errno_report("exchange: failed to send request, retrying"); /* DEBUG */
-            close_client_force(url);
+            if (close_client_force(url) == -EAGAIN)
+                goto req;
             continue;
         }
         if (res <= 0){
             errno_report("exchange: failed to send request"); /* DEBUG */
+            if (close_client_force(url) == -EAGAIN)
+                goto req;
             return res;
         }
         res = read_client_socket(url, buf, HEADER_SIZE);
@@ -1636,17 +1642,21 @@ req:
             errno_report("exchange: sleeping");
             sleep(1U << url->resets);
             url->resets ++;
-            close_client_force(url);
+            if (close_client_force(url) == -EAGAIN)
+                goto req;
             continue;
         }
         url->resets = 0;
 #endif
         if (CONNFAIL) {
             errno_report("exchange: did not receive a reply, retrying"); /* DEBUG */
-            close_client_force(url);
+            if (close_client_force(url) == -EAGAIN)
+                goto req;
             continue;
         } else if (res <= 0) {
             errno_report("exchange: failed receving reply from server"); /* DEBUG */
+            if (close_client_force(url) == -EAGAIN)
+                goto req;
             return res;
         } else {
             bytes = (size_t)res;
