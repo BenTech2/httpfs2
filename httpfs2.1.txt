@@ -22,12 +22,17 @@ single URL can be mounted. The server must be able to send byte ranges.
 
 OPTIONS
 -------
+
 *-c 'console'*::
     Attempt to use the file or device 'console' for output after fork.
     The default is '/dev/console'.
 
 *-f*::
     Do not fork, stay in foreground.
+
+*-r 'retries'*::
+    (if 'ECONNRESET' is defined) Retry connecting to server after receiving
+    'ECONNRESET'. Defaults to 8 times which gives about 30s timeout.
 
 *-t 'timeout'*::
     Use different timeout for connections. Default '30's.
