@@ -1082,6 +1082,8 @@ static int close_client_socket(struct_url *url) {
 }
 
 static int close_client_force(struct_url *url) {
+    int sock_closed = 0;
+
     if(url->sock_type != SOCK_CLOSED){
         fprintf(stderr, "%s: %s: closing socket.\n", argv0, url->tname); /*DEBUG*/
 #ifdef USE_SSL
@@ -1092,12 +1094,13 @@ static int close_client_force(struct_url *url) {
         }
 #endif
         close(url->sockfd);
+        sock_closed = 1;
     }
     url->sock_type = SOCK_CLOSED;
 
     if(url->redirected && url->redirect_followed) {
         fprintf(stderr, "%s: %s: returning from redirect to master %s\n", argv0, url->tname, url->url);
-        url->redirect_depth = 0;
+        if (sock_closed) url->redirect_depth = 0;
         url->redirect_followed = 0;
         url->redirected = 0;
         parse_url(NULL, url, URL_DROP);
