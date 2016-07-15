@@ -58,12 +58,21 @@ static pthread_key_t url_key;
 #include <gnutls/x509.h>
 #endif
 
+/*
+ * ECONNRESET happens with some dodgy servers so may need to handle that.
+ * Allow for building without ECONNRESET in case it is not defined.
+ */
+#ifdef ECONNRESET
+#define RETRY_ON_RESET
+#endif
+
 #define TIMEOUT 30
 #define CONSOLE "/dev/console"
 #define HEADER_SIZE 1024
 #define MAX_REQUEST (32*1024)
 #define MAX_REDIRECTS 32
 #define TNAME_LEN 13
+#define RESET_RETRIES 8
 #define VERSION "0.1.5 \"The Message\""
 
 enum sock_state {
@@ -90,7 +99,8 @@ typedef struct url {
     char * auth; /*encoded auth data*/
 #endif
 #ifdef RETRY_ON_RESET
-    int retry_reset; /*retry reset connections*/
+    long retry_reset; /*retry reset connections*/
+    long resets;
 #endif
     int sockfd;
     enum sock_state sock_type;
@@ -691,6 +701,9 @@ static int init_url(struct_url* url)
     memset(url, 0, sizeof(*url));
     url->sock_type = SOCK_CLOSED;
     url->timeout = TIMEOUT;
+#ifdef RETRY_ON_RESET
+    url->retry_reset = RESET_RETRIES;
+#endif
 #ifdef USE_SSL
     url->cafile = CERT_STORE;
 #endif
@@ -865,7 +878,7 @@ static void usage(void)
 #ifdef USE_SSL
             "[-a file] [-d n] [-5] [-2] "
 #endif
-            "[-f] [-t timeout] [-r] url mount-parameters\n\n", argv0);
+            "[-f] [-t timeout] [-r n] url mount-parameters\n\n", argv0);
 #ifdef USE_SSL
     fprintf(stderr, "\t -2 \tAllow RSA-MD2 server certificate\n");
     fprintf(stderr, "\t -5 \tAllow RSA-MD5 server certificate\n");
@@ -873,11 +886,11 @@ static void usage(void)
 #endif
     fprintf(stderr, "\t -c \tuse console for standard input/output/error\n\t\t(default: %s)\n", CONSOLE);
 #ifdef USE_SSL
-    fprintf(stderr, "\t -d \tGNUTLS debug level\n");
+    fprintf(stderr, "\t -d \tGNUTLS debug level (default 0)\n");
 #endif
     fprintf(stderr, "\t -f \tstay in foreground - do not fork\n");
 #ifdef RETRY_ON_RESET
-    fprintf(stderr, "\t -r \tretry connection on reset\n");
+    fprintf(stderr, "\t -r \tnumber of times to retry connection on reset\n\t\t(default: %i)\n", RESET_RETRIES);
 #endif
     fprintf(stderr, "\t -t \tset socket timeout in seconds (default: %i)\n", TIMEOUT);
     fprintf(stderr, "\tmount-parameters should include the mount point\n");
@@ -938,7 +951,9 @@ int main(int argc, char *argv[])
                           break;
 #endif
 #ifdef RETRY_ON_RESET
-                case 'r': main_url.retry_reset = 1;
+                case 'r': if (convert_num(&main_url.retry_reset, argv))
+                              return 4;
+                          shift;
                           break;
 #endif
                 case 't': if (convert_num(&main_url.timeout, argv))
@@ -1588,17 +1603,21 @@ req:
          * required to touch it but are handled as error below.
          *
          */
-        /* ECONNRESET happens with some dodgy servers so may need to handle that.
-         * Allow for building without it in case it is not defined.
-         */
-#ifdef RETRY_ON_RESET
-#define CONNFAIL ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE) || \
-        (url->retry_reset && (errno == ECONNRESET))
-#else
 #define CONNFAIL ((res <= 0) && ! errno) || (errno == EAGAIN) || (errno == EPIPE)
-#endif
+
         errno = 0;
         res = write_client_socket(url, buf, bytes);
+
+#ifdef RETRY_ON_RESET
+        if ((errno == ECONNRESET) && (url->resets < url->retry_reset)) {
+            errno_report("exchange: sleeping");
+            sleep(1U << url->resets);
+            url->resets ++;
+            close_client_force(url);
+            continue;
+        }
+        url->resets = 0;
+#endif
         if (CONNFAIL) {
             errno_report("exchange: failed to send request, retrying"); /* DEBUG */
             close_client_force(url);
@@ -1609,6 +1628,17 @@ req:
             return res;
         }
         res = read_client_socket(url, buf, HEADER_SIZE);
+
+#ifdef RETRY_ON_RESET
+        if ((errno == ECONNRESET) && (url->resets < url->retry_reset)) {
+            errno_report("exchange: sleeping");
+            sleep(1U << url->resets);
+            url->resets ++;
+            close_client_force(url);
+            continue;
+        }
+        url->resets = 0;
+#endif
         if (CONNFAIL) {
             errno_report("exchange: did not receive a reply, retrying"); /* DEBUG */
             close_client_force(url);
