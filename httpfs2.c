@@ -1253,6 +1253,7 @@ static int open_client_socket(struct_url *url) {
     if ((gaierr = getaddrinfo(url->host, portstr, &hints, &ai)) != 0) {
         (void) fprintf(stderr, "%s: getaddrinfo %s - %s\n",
                 argv0, url->host, gai_strerror(gaierr));
+        errno = EIO;
         return -1;
     }
 
