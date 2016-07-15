@@ -19,7 +19,7 @@
  * Modified to work with fuse 2.7.
  * Added keepalive
  * The passthru functionality removed to simplify the code.
- * (c) 2008-2012 Michal Suchanek <hramrach@gmail.com>
+ * (c) 2008-2012,2016 Michal Suchanek <hramrach@gmail.com>
  *
  */
 
