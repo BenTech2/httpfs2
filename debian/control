@@ -3,7 +3,7 @@ Section: web
 Priority: extra
 Maintainer: Michal Suchanek <hramrach@centrum.cz>
 Build-Depends:
- debhelper (>= 7.0.50~),
+ debhelper (>= 9~), dh-exec,
  asciidoc, xmlto,
  libfuse-dev (>> 2.6), pkg-config,
  libgnutls-dev (>= 2.10~),
