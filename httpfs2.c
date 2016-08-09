@@ -422,7 +422,7 @@ static int mempref(const char * mem, const char * pref, size_t size, int case_se
 #ifdef USE_SSL
 
 static void errno_report(const char * where);
-static void ssl_error(ssize_t error, gnutls_session_t ss, const char * where);
+static void ssl_error(ssize_t error, struct_url * url, const char * where);
 /* Functions to deal with gnutls_datum_t stolen from gnutls docs.
  * The structure does not seem documented otherwise.
  */
@@ -568,7 +568,7 @@ verify_certificate_callback (gnutls_session_t session)
     ret = gnutls_certificate_verify_peers2 (session, &status);
     if (ret < 0)
     {
-        ssl_error(ret, session, "verify certificate");
+        ssl_error(ret, url, "verify certificate");
         return GNUTLS_E_CERTIFICATE_ERROR;
     }
     if (status & GNUTLS_CERT_INVALID)
@@ -591,7 +591,7 @@ verify_certificate_callback (gnutls_session_t session)
         return GNUTLS_E_CERTIFICATE_ERROR;
     if (gnutls_x509_crt_init (&cert) < 0)
     {
-        ssl_error(ret, session, "verify certificate");
+        ssl_error(ret, url, "verify certificate");
         return GNUTLS_E_CERTIFICATE_ERROR;
     }
     cert_list = gnutls_certificate_get_peers (session, &cert_list_size);
@@ -604,7 +604,7 @@ verify_certificate_callback (gnutls_session_t session)
     ret = gnutls_x509_crt_import (cert, &cert_list[0], GNUTLS_X509_FMT_DER);
     if (ret < 0)
     {
-        ssl_error(ret, session, "parsing certificate");
+        ssl_error(ret, url, "parsing certificate");
         return GNUTLS_E_CERTIFICATE_ERROR;
     }
     if (!(url->ssl_connected)) if (!gnutls_x509_crt_print (cert, GNUTLS_CRT_PRINT_FULL, &data)) {
@@ -637,7 +637,7 @@ verify_certificate_callback (gnutls_session_t session)
                         if (!(url->ssl_connected)) fprintf(stderr, "Cert CN(%i): %s: %c\n", i, dn, match?'*':'X');
                     }}
                 else
-                    ssl_error(dn_ret, session, "getting cert subject data");
+                    ssl_error(dn_ret, url, "getting cert subject data");
                 if (dn) free(dn);
                 if (dn_ret || !dn)
                     break;
@@ -666,12 +666,11 @@ static void logfunc(int level, const char * str)
     fputs(str, stderr);
 }
 
-static void ssl_error(ssize_t error, gnutls_session_t ss, const char * where)
+static void ssl_error(ssize_t error, struct_url * url, const char * where)
 {
-    struct_url * url = thread_setup();
     const char * err_desc;
     if((error == GNUTLS_E_FATAL_ALERT_RECEIVED) || (error == GNUTLS_E_WARNING_ALERT_RECEIVED))
-        err_desc = gnutls_alert_get_name(gnutls_alert_get(ss));
+        err_desc = gnutls_alert_get_name(gnutls_alert_get(url->ss));
     else
         err_desc = gnutls_strerror((int)error);
 
@@ -1070,18 +1069,18 @@ int main(int argc, char *argv[])
 int handle_ssl_error(struct_url *url, ssize_t * res)
 {
     if (*res == GNUTLS_E_REHANDSHAKE) {
-        ssl_error(*res, url->ss, "Rehanshake SSL requested by server.");
+        ssl_error(*res, url, "Rehanshake SSL requested by server.");
         if (gnutls_safe_renegotiation_status(url->ss)) {
             *res = gnutls_handshake (url->ss);
             return 1;
         } else {
-            ssl_error(*res, url->ss, "Safe rehanshake not supported on this connection.");
+            ssl_error(*res, url, "Safe rehanshake not supported on this connection.");
             return 0;
         }
     }
 
     if (!gnutls_error_is_fatal((int)*res)) {
-        ssl_error(*res, url->ss, "Ignoring non-fatal SSL error.");
+        ssl_error(*res, url, "Ignoring non-fatal SSL error.");
         *res = 0;
         return 1;
     }
@@ -1190,7 +1189,7 @@ static ssize_t read_client_socket(struct_url *url, void * buf, size_t len) {
         do {
             res = gnutls_record_recv(url->ss, buf, len);
         } while ((res <= 0) && handle_ssl_error(url, &res));
-        if (res <= 0) ssl_error(res, url->ss, "read");
+        if (res <= 0) ssl_error(res, url, "read");
     } else
 #endif
     {
@@ -1213,7 +1212,7 @@ write_client_socket(struct_url *url, const void * buf, size_t len)
             do {
                 res = gnutls_record_send(url->ss, buf, len);
             } while ((res <= 0) && handle_ssl_error(url, &res));
-            if (res <= 0) ssl_error(res, url->ss, "write");
+            if (res <= 0) ssl_error(res, url, "write");
             /*
              * It is suggested to retry GNUTLS_E_INTERRUPTED and GNUTLS_E_AGAIN
              * However, retrying only causes delay in practice. FIXME
@@ -1375,7 +1374,7 @@ static int open_client_socket(struct_url *url) {
             gnutls_global_set_log_function(&logfunc);
         }
         if (r) {
-            ssl_error(r, url->ss, "SSL init");
+            ssl_error(r, url, "SSL init");
             return -1;
         }
 
@@ -1393,7 +1392,7 @@ static int open_client_socket(struct_url *url) {
             close(url->sockfd);
             if (errp) fprintf(stderr, "%s: invalid SSL priority\n %s\n %*s\n", argv0, ps, (int)(errp - ps), "^");
             fprintf(stderr, "%s: %s:%d - ", argv0, url->host, url->port);
-            ssl_error(r, url->ss, "SSL connection failed");
+            ssl_error(r, url, "SSL connection failed");
             fprintf(stderr, "%s: %s: closing SSL socket.\n", argv0, url->tname);
             gnutls_deinit(url->ss);
             errno = EIO;
