@@ -423,7 +423,7 @@ static int mempref(const char * mem, const char * pref, size_t size, int case_se
 
 static void errno_report(const char * where);
 static void ssl_error(ssize_t error, struct_url * url, const char * where);
-static void ssl_error_p(ssize_t error, struct_url * url, const char * where);
+static void ssl_error_p(ssize_t error, struct_url * url, const char * where, const char * extra);
 /* Functions to deal with gnutls_datum_t stolen from gnutls docs.
  * The structure does not seem documented otherwise.
  */
@@ -1073,7 +1073,7 @@ int main(int argc, char *argv[])
 
 #ifdef USE_SSL
 /* handle non-fatal SSL errors */
-int handle_ssl_error(struct_url *url, ssize_t * res, where)
+int handle_ssl_error(struct_url *url, ssize_t * res, const char *where)
 {
     /* do not handle success */
     if (!res)
@@ -1086,7 +1086,7 @@ int handle_ssl_error(struct_url *url, ssize_t * res, where)
         return 0;
 
     if (*res == GNUTLS_E_REHANDSHAKE) {
-        fprintf(stderr, "%s: %s: %s: %zd %s.\n", argv0, url->tname, where, error,
+        fprintf(stderr, "%s: %s: %s: %zd %s.\n", argv0, url->tname, where, *res,
                 "SSL rehanshake requested by server");
         if (gnutls_safe_renegotiation_status(url->ss)) {
             *res = gnutls_handshake (url->ss);
@@ -1095,7 +1095,7 @@ int handle_ssl_error(struct_url *url, ssize_t * res, where)
             }
             return 1;
         } else {
-            fprintf(stderr, "%s: %s: %s: %zd %s.\n", argv0, url->tname, where, error,
+            fprintf(stderr, "%s: %s: %s: %zd %s.\n", argv0, url->tname, where, *res,
                     "safe rehandshake not supported on this connection");
             return 0;
         }
