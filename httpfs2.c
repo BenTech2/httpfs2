@@ -1688,6 +1688,8 @@ req:
             errno_report("exchange: failed to send request"); /* DEBUG */
             if (close_client_force(url) == -EAGAIN)
                 goto req;
+            if (!errno)
+                errno = EIO;
             return res;
         }
         res = read_client_socket(url, buf, HEADER_SIZE);
@@ -1712,6 +1714,8 @@ req:
             errno_report("exchange: failed receving reply from server"); /* DEBUG */
             if (close_client_force(url) == -EAGAIN)
                 goto req;
+            if (!errno)
+                errno = EIO;
             return res;
         } else {
             bytes = (size_t)res;
