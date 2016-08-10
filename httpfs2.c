@@ -1454,6 +1454,7 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
     int seen_accept = 0, seen_length = 0, seen_close = 0;
 
     if (bytes <= 0) {
+        errno = EINVAL;
         return -1;
     }
 
@@ -1495,6 +1496,7 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
                 close_client_force(url);
                 http_report("redirect did not contain a Location header!",
                         method, buf, 0);
+                errno = ENOENT;
                 return -1;
             }
 
@@ -1510,7 +1512,8 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
                 url->redirect_depth ++;
                 if (url->redirect_depth > MAX_REDIRECTS) {
                     fprintf(stderr, "%s: %s: server redirected %i times already. Giving up.", argv0, url->tname, MAX_REDIRECTS);
-                    return -EIO;
+                    errno = EIO;
+                    return -1;
                 }
 
                 if (status == 301) {
@@ -1525,8 +1528,10 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
                     free(tmp);
                 }
 
-                if(res < 0)
+                if(res < 0) {
+                    errno = EIO;
                     return res;
+                }
 
                 print_url(stderr, url);
                 return -EAGAIN;
@@ -1537,8 +1542,10 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
         fprintf(stderr, "%s: %s: failed with status: %d%.*s.\n",
                 argv0, method, status, (int)((end - ptr) - 1), ptr);
         if (!strcmp("HEAD", method)) fwrite(buf, bytes, 1, stderr); /*DEBUG*/
-        errno = EIO;
-        if (status == 404) errno = ENOENT;
+        if (status == 404)
+            errno = ENOENT;
+        else
+            errno = EIO;
         return -1;
     }
 
