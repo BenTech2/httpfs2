@@ -224,7 +224,7 @@ static int httpfs_stat(fuse_ino_t ino, struct stat *stbuf)
                     fprintf(stderr, "%s: %s: stat()\n", argv0, url->tname); /*DEBUG*/
                     stbuf->st_mode = S_IFREG | 0444;
                     stbuf->st_nlink = 1;
-                    return (int) get_stat(url, stbuf);
+                    return (int) (get_stat(url, stbuf) == -1) ? -1 : 0;
                 }
                 break;
 
