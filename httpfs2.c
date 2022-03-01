@@ -226,7 +226,7 @@ static int httpfs_stat(fuse_ino_t ino, struct stat *stbuf)
                     fprintf(stderr, "%s: %s: stat()\n", argv0, url->tname); /*DEBUG*/
                     stbuf->st_mode = S_IFREG | 0444;
                     stbuf->st_nlink = 1;
-                    return (int) get_stat(url, stbuf);
+                    return -(get_stat(url, stbuf) < 0);
                 }
                 break;
 
@@ -1568,7 +1568,7 @@ parse_header(struct_url *url, const char * buf, size_t bytes,
     while(1)
     {
         ptr = end+1;
-        if( !(ptr < buf + (header_len - 4))){
+        if( !(ptr < buf + (header_len - 4)) ){
             if(seen_accept && seen_length){
                 if(url->sock_type == SOCK_OPEN && !seen_close)
                     url->sock_type = SOCK_KEEPALIVE;

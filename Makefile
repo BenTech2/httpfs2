@@ -1,6 +1,6 @@
 MAIN_CFLAGS :=  -g -Os -Wall $(shell pkg-config fuse --cflags)
-MAIN_CPPFLAGS := -Wall -Wno-unused-function -Wconversion -Wtype-limits -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE
-THR_CPPFLAGS := -DUSE_THREAD
+MAIN_CPPFLAGS := -Wall -Wno-unused-function -Wconversion -Wtype-limits -DUSE_AUTH -D_XOPEN_SOURCE=700 -D_ISOC99_SOURCE -D_FILE_OFFSET_BITS=64
+THR_CPPFLAGS := -DUSE_THREAD -pthread
 THR_LDFLAGS := -lpthread
 GNUTLS_VERSION := 2.10
 MAIN_LDFLAGS := $(shell pkg-config fuse --libs | sed -e s/-lrt// -e s/-ldl// -e s/-pthread// -e "s/  / /g")
